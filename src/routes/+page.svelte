@@ -2,23 +2,25 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 
-	let counts = $state({ jenisobat: 0, obat: 0, pbf: 0, purchase: 0 });
+	let counts = $state({ jenisobat: 0, obat: 0, pbf: 0, purchase: 0, resep: 0 });
 	let loading = $state(true);
 
 	async function loadCounts() {
 		loading = true;
 		try {
-			const [jenisRes, obatRes, pbfRes, purchaseRes] = await Promise.all([
+			const [jenisRes, obatRes, pbfRes, purchaseRes, resepRes] = await Promise.all([
 				supabase.from('jenisobat').select('*', { count: 'exact', head: true }),
 				supabase.from('obat').select('*', { count: 'exact', head: true }),
 				supabase.from('pbf').select('*', { count: 'exact', head: true }),
-				supabase.from('purchase').select('*', { count: 'exact', head: true })
+				supabase.from('purchase').select('*', { count: 'exact', head: true }),
+				supabase.from('resep').select('*', { count: 'exact', head: true })
 			]);
 			counts = {
 				jenisobat: jenisRes.count ?? 0,
 				obat: obatRes.count ?? 0,
 				pbf: pbfRes.count ?? 0,
-				purchase: purchaseRes.count ?? 0
+				purchase: purchaseRes.count ?? 0,
+				resep: resepRes.count ?? 0
 			};
 		} catch (e) {
 			console.error('Error loading counts:', e);
@@ -35,6 +37,21 @@
 </div>
 
 <div class="dashboard-grid">
+	<a href="/resep" class="dash-card">
+		<div class="dash-card-icon" style="background: #e0f2fe; color: #0284c7;">📋</div>
+		<div>
+			<h3>Resep Dokter</h3>
+			<p>Pencarian resep nama pasien dan pembuatan resep baru</p>
+		</div>
+		<div class="card-count">
+			{#if loading}
+				<span style="font-size: 0.9rem; color: var(--color-text-muted);">Memuat...</span>
+			{:else}
+				{counts.resep}
+			{/if}
+		</div>
+	</a>
+
 	<a href="/jenisobat" class="dash-card">
 		<div class="dash-card-icon" style="background: #ccfbf1; color: #0f766e;">🏷️</div>
 		<div>

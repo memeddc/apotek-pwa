@@ -180,6 +180,12 @@
 		}
 	}
 
+	function setHargaMinimum() {
+		if (stokInfo && stokInfo.min_price > 0) {
+			inputHarga = stokInfo.min_price;
+		}
+	}
+
 	function tambahItem() {
 		if (!selectedObat) { showToast('Pilih obat dari hasil pencarian.', 'error'); return; }
 		if (inputQty <= 0) { showToast('Jumlah harus lebih dari 0.', 'error'); return; }
@@ -397,9 +403,33 @@
 		</div>
 		<div class="form-group">
 			<label for="harga-jual">Harga</label>
-			<input id="harga-jual" type="number" min="0" bind:value={inputHarga} />
+			<input
+				id="harga-jual"
+				type="number"
+				min="0"
+				bind:value={inputHarga}
+				class:input-below-min={stokInfo && stokInfo.min_price > 0 && inputHarga < stokInfo.min_price}
+			/>
 			{#if stokInfo && stokInfo.min_price > 0}
-				<small class="min-hint">Min: <strong>Rp{formatRp(stokInfo.min_price)}</strong></small>
+				{#if inputHarga < stokInfo.min_price}
+					<button
+						type="button"
+						class="btn-set-min"
+						onclick={setHargaMinimum}
+						title="Klik untuk mengubah harga ke harga minimum obat"
+					>
+						⚠️ Set ke Min: <strong>Rp{formatRp(stokInfo.min_price)}</strong>
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="min-hint-btn"
+						onclick={setHargaMinimum}
+						title="Klik untuk menggunakan harga minimum obat"
+					>
+						Min: <strong>Rp{formatRp(stokInfo.min_price)}</strong>
+					</button>
+				{/if}
 			{/if}
 		</div>
 		<div class="form-group add-btn-group">
@@ -565,9 +595,47 @@
 		background: var(--color-primary-50); color: var(--color-primary-dark);
 		padding: 1px 6px; border-radius: 4px; font-size: .72rem;
 	}
-	.search-hint { color: var(--color-text-muted); font-size: .78rem; }
-	.stok-hint, .min-hint { font-size: .78rem; color: var(--color-text-muted); }
-	.min-hint strong { color: var(--color-warning); }
+	.search-hint, .stok-hint { color: var(--color-text-muted); font-size: .78rem; }
+	.input-below-min {
+		border-color: #f59e0b !important;
+		background-color: #fffbebfb !important;
+	}
+	.btn-set-min {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		background: #fef3c7;
+		color: #92400e;
+		border: 1px solid #fcd34d;
+		border-radius: 4px;
+		padding: 2px 6px;
+		font-size: .75rem;
+		font-weight: 600;
+		cursor: pointer;
+		margin-top: 4px;
+		transition: background var(--transition-fast), border-color var(--transition-fast);
+	}
+	.btn-set-min:hover {
+		background: #fde68a;
+		border-color: #f59e0b;
+		color: #78350f;
+	}
+	.min-hint-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+		color: var(--color-text-muted);
+		font-size: .78rem;
+		cursor: pointer;
+		text-align: left;
+		margin-top: 4px;
+	}
+	.min-hint-btn:hover {
+		color: var(--color-primary-dark);
+		text-decoration: underline;
+	}
+	.min-hint-btn strong { color: var(--color-warning); }
 	.diberikan-tag {
 		background: var(--color-success-light); color: var(--color-success);
 		padding: 0 4px; border-radius: 3px; font-size: .72rem; font-weight: 600;

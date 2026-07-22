@@ -84,3 +84,54 @@ export interface IFakturSimpanInput {
     total_disc: number;
     details: IFakturItemInput[];
 }
+
+export interface Iresep {
+    id?: string;
+    resep_id: string; // Primary Key (e.g. RSP-20260722-001)
+    pasien_nama: string;
+    dokter_nama: string;
+    alamat_pasien: string;
+    tanggal_resep: string; // Format: YYYY-MM-DD
+    tanggal_buat?: string; // Format: YYYY-MM-DD HH:mm:ss
+    ket_resep?: string | null;
+}
+
+export interface Idetail_resep {
+    resep_id: string;
+    obat_id: string;
+    qty_resep: number;
+    qty_asli: number;
+    harga_per_obat: number;
+}
+
+export interface Idetail_racikan {
+    resep_id: string;
+    obat_id: string;
+    qty_racikan: number;
+}
+
+export interface IResepItemInput {
+    obat_id: string;
+    obat_nama?: string;
+    qty_resep: number;
+    qty_asli: number;
+    harga_per_obat: number;
+}
+
+export interface IResepRacikanInput {
+    obat_id: string;
+    obat_nama?: string;
+    qty_racikan: number;
+}
+
+export interface IResepSimpanInput {
+    resep_id: string;
+    pasien_nama: string;
+    dokter_nama: string;
+    alamat_pasien: string;
+    tanggal_resep: string;
+    ket_resep?: string;
+    details: IResepItemInput[];
+    racikan: IResepRacikanInput[];
+}
+

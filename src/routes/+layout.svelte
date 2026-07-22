@@ -17,6 +17,7 @@
 		{ href: '/stok', label: 'Stok', icon: 'S' },
 		{ href: '/kartu_stok', label: 'Kartu Stok', icon: 'K' },
 		{ href: '/rubah_harga', label: 'Rubah Harga', icon: '💲' },
+		{ href: '/resep', label: 'Resep Dokter', icon: '📋' },
 		{ href: '/jenisobat', label: 'Jenis Obat', icon: '🏷️' },
 		{ href: '/obat', label: 'Obat', icon: '💊' },
 		{ href: '/pbf', label: 'PBF / Supplier', icon: '🏢' }
