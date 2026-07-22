@@ -6,9 +6,12 @@
 		obat_id: string;
 		qty: number;
 		harga_obat: number;
+		disc: number;
+		total_line: number;
 		obat_nama: string;
 		jenis_nama: string;
 	};
+
 	type TransRecord = {
 		trans_id: string;
 		tanggal_waktu: string;
@@ -16,6 +19,8 @@
 		total_disc: number;
 		bayar: number;
 		kembali: number;
+		type: 'penjualan' | 'pembelian';
+		pbf_nama?: string;
 		details: TransDetail[];
 	};
 
@@ -24,6 +29,7 @@
 	let dateFrom = $state('');
 	let dateTo = $state('');
 	let obatQuery = $state('');
+	let transTypeFilter = $state<'all' | 'penjualan' | 'pembelian'>('all');
 	let selectedTrans = $state<TransRecord | null>(null);
 	let toastMsg = $state('');
 	let toastType = $state<'success' | 'error'>('success');
@@ -40,13 +46,17 @@
 	}
 
 	function formatTanggal(dt: string): string {
+		if (!dt) return '-';
 		const d = new Date(dt);
+		if (isNaN(d.getTime())) return dt;
 		const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 		return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 	}
 
 	function formatWaktu(dt: string): string {
+		if (!dt) return '-';
 		const d = new Date(dt);
+		if (isNaN(d.getTime())) return '';
 		return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 	}
 
@@ -67,6 +77,62 @@
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 	}
 
+	function parseTransDate(transId: string, dtString?: string | null): string {
+		if (dtString) {
+			const parsed = new Date(dtString);
+			if (!isNaN(parsed.getTime())) return parsed.toISOString();
+		}
+		const cleanId = transId.replace(/^J/, '');
+		if (/^\d{8}/.test(cleanId)) {
+			const y = cleanId.slice(0, 4);
+			const m = cleanId.slice(4, 6);
+			const d = cleanId.slice(6, 8);
+			return `${y}-${m}-${d}T00:00:00+07:00`;
+		}
+		return new Date().toISOString();
+	}
+
+	function parseDetailItem(
+		d: { trans_id: string; obat_id: string; qty: number; total_per_obat?: number; harga_obat?: number; disc?: number },
+		transTotal: number,
+		rawGroup: any[]
+	) {
+		const qty = d.qty || 1;
+		const disc = Number(d.disc) || 0;
+
+		let unitPrice = 0;
+		if (d.harga_obat !== undefined) {
+			const val = Number(d.harga_obat) || 0;
+			const sumLine = rawGroup.reduce((s, item) => s + (Number(item.harga_obat) || 0), 0);
+			const sumUnit = rawGroup.reduce((s, item) => s + ((Number(item.harga_obat) || 0) * (item.qty || 1)), 0);
+			if (Math.abs(sumUnit - transTotal) < Math.abs(sumLine - transTotal)) {
+				unitPrice = val;
+			} else {
+				unitPrice = qty > 0 ? val / qty : 0;
+			}
+		} else {
+			const val = Number(d.total_per_obat) || 0;
+			const sumLine = rawGroup.reduce((s, item) => s + (Number(item.total_per_obat) || 0), 0);
+			const sumUnit = rawGroup.reduce((s, item) => s + ((Number(item.total_per_obat) || 0) * (item.qty || 1)), 0);
+			if (Math.abs(sumUnit - transTotal) < Math.abs(sumLine - transTotal)) {
+				unitPrice = val;
+			} else {
+				unitPrice = qty > 0 ? val / qty : 0;
+			}
+		}
+
+		const total_line = Math.round(qty * unitPrice);
+
+		return {
+			trans_id: d.trans_id,
+			obat_id: d.obat_id,
+			qty,
+			harga_obat: Math.round(unitPrice),
+			disc,
+			total_line
+		};
+	}
+
 	async function loadTransactions() {
 		if (!dateFrom || !dateTo) return;
 		loading = true;
@@ -74,7 +140,10 @@
 		const startDt = `${dateFrom}T00:00:00+07:00`;
 		const endDt = `${tomorrowOf(dateTo)}T00:00:00+07:00`;
 
-		// Load penjualan
+		const dateFromPrefix = dateFrom.replaceAll('-', '');
+		const dateToNextPrefix = tomorrowOf(dateTo).replaceAll('-', '');
+
+		// 1. Load penjualan
 		const { data: sales, error: salesError } = await supabase
 			.from('penjualan')
 			.select('*')
@@ -82,45 +151,65 @@
 			.lt('tanggal_waktu', endDt)
 			.order('tanggal_waktu', { ascending: false });
 
-		if (salesError) { showToast(`Gagal memuat data: ${salesError.message}`, 'error'); loading = false; return; }
-		if (!sales || sales.length === 0) { transactions = []; loading = false; return; }
+		if (salesError) {
+			showToast(`Gagal memuat data penjualan: ${salesError.message}`, 'error');
+			loading = false;
+			return;
+		}
 
-		const transIds = sales.map((s) => s.trans_id);
-
-		// Load details from detail_penjualan
-		const { data: detailsPenjualan, error: detailError } = await supabase
-			.from('detail_penjualan')
+		// 2. Load purchase
+		const { data: purchases, error: purchaseError } = await supabase
+			.from('purchase')
 			.select('*')
-			.in('trans_id', transIds);
+			.or(`and(tanggal_waktu.gte.${startDt},tanggal_waktu.lt.${endDt}),and(trans_id.gte.${dateFromPrefix},trans_id.lt.${dateToNextPrefix})`)
+			.order('trans_id', { ascending: false });
 
-		if (detailError) { showToast(`Gagal memuat detail penjualan: ${detailError.message}`, 'error'); loading = false; return; }
+		if (purchaseError) {
+			showToast(`Gagal memuat data pembelian: ${purchaseError.message}`, 'error');
+			loading = false;
+			return;
+		}
 
-		// Load details from detail_purchase (for older sales that mistakenly saved there)
-		const { data: detailsPurchase, error: purchaseError } = await supabase
-			.from('detail_purchase')
-			.select('*')
-			.in('trans_id', transIds);
+		// Load PBF master data for purchases
+		const { data: pbfList } = await supabase.from('pbf').select('pbf_id, pbf_nama');
+		const pbfMap = new Map<string, string>();
+		(pbfList ?? []).forEach((p) => pbfMap.set(p.pbf_id, p.pbf_nama));
 
-		if (purchaseError) { showToast(`Gagal memuat detail purchase: ${purchaseError.message}`, 'error'); loading = false; return; }
+		const salesList = sales ?? [];
+		const purchasesList = purchases ?? [];
 
-		// Combine both details
-		const allDetails = [
-			...(detailsPenjualan ?? []).map((d) => ({ trans_id: d.trans_id, obat_id: d.obat_id, qty: d.qty, harga_obat: d.harga_obat })),
-			...(detailsPurchase ?? []).map((d) => ({ trans_id: d.trans_id, obat_id: d.obat_id, qty: d.qty, harga_obat: d.total_per_obat }))
-		];
+		const salesTransIds = salesList.map((s) => s.trans_id);
+		const purchaseTransIds = purchasesList.map((p) => p.trans_id);
+		const allTransIds = [...new Set([...salesTransIds, ...purchaseTransIds])];
 
-		// Load obat info
-		const obatIds = [...new Set(allDetails.map((d) => d.obat_id))];
+		if (allTransIds.length === 0) {
+			transactions = [];
+			loading = false;
+			return;
+		}
+
+		// 3. Load details from detail_penjualan and detail_purchase
+		const [{ data: detailsPenjualan }, { data: detailsPurchase }] = await Promise.all([
+			supabase.from('detail_penjualan').select('*').in('trans_id', allTransIds),
+			supabase.from('detail_purchase').select('*').in('trans_id', allTransIds)
+		]);
+
+		const dpList = detailsPenjualan ?? [];
+		const dpurList = detailsPurchase ?? [];
+
+		// Collect all obat_ids for name lookup
+		const obatIds = [...new Set([...dpList.map((d) => d.obat_id), ...dpurList.map((d) => d.obat_id)])];
 		let obatData: any[] = [];
 		if (obatIds.length > 0) {
-			const { data, error: obatError } = await supabase
+			const { data: oData, error: obatError } = await supabase
 				.from('obat')
 				.select('obat_id, obat_nama, jenis_id, jenis_obat(jenis_nama)')
 				.in('obat_id', obatIds);
+
 			if (obatError) {
-				showToast(`Gagal memuat obat: ${obatError.message}`, 'error');
+				showToast(`Gagal memuat detail obat: ${obatError.message}`, 'error');
 			} else {
-				obatData = data ?? [];
+				obatData = oData ?? [];
 			}
 		}
 
@@ -128,31 +217,111 @@
 		obatData.forEach((o: any) => {
 			obatMap.set(o.obat_id, {
 				obat_nama: o.obat_nama,
-				jenis_nama: o.jenis_obat?.jenis_nama ?? o.jenis_id
+				jenis_nama: o.jenis_obat?.jenis_nama ?? o.jenis_id ?? '-'
 			});
 		});
 
-		// Combine
-		transactions = sales.map((s) => ({
-			...s,
-			details: allDetails
-				.filter((d) => d.trans_id === s.trans_id)
-				.map((d) => ({
-					...d,
-					obat_nama: obatMap.get(d.obat_id)?.obat_nama ?? d.obat_id,
-					jenis_nama: obatMap.get(d.obat_id)?.jenis_nama ?? '-'
-				}))
-		}));
+		// Build sales transactions
+		const mappedSales: TransRecord[] = salesList.map((s) => {
+			const rawItemsPenjualan = dpList.filter((d) => d.trans_id === s.trans_id);
+			const rawItemsPurchase = dpurList.filter((d) => d.trans_id === s.trans_id);
 
+			let itemDetails: TransDetail[] = [];
+			if (rawItemsPenjualan.length > 0) {
+				itemDetails = rawItemsPenjualan.map((d) => {
+					const parsed = parseDetailItem(d, s.total_trans, rawItemsPenjualan);
+					const oInfo = obatMap.get(d.obat_id);
+					return {
+						...parsed,
+						obat_nama: oInfo?.obat_nama ?? d.obat_id,
+						jenis_nama: oInfo?.jenis_nama ?? '-'
+					};
+				});
+			} else if (rawItemsPurchase.length > 0) {
+				itemDetails = rawItemsPurchase.map((d) => {
+					const parsed = parseDetailItem(d, s.total_trans, rawItemsPurchase);
+					const oInfo = obatMap.get(d.obat_id);
+					return {
+						...parsed,
+						obat_nama: oInfo?.obat_nama ?? d.obat_id,
+						jenis_nama: oInfo?.jenis_nama ?? '-'
+					};
+				});
+			}
+
+			return {
+				trans_id: s.trans_id,
+				tanggal_waktu: parseTransDate(s.trans_id, s.tanggal_waktu),
+				total_trans: Number(s.total_trans) || 0,
+				total_disc: Number(s.total_disc) || 0,
+				bayar: Number(s.bayar) || Number(s.total_trans) || 0,
+				kembali: Number(s.kembali) || 0,
+				type: 'penjualan',
+				details: itemDetails
+			};
+		});
+
+		// Build purchase transactions
+		const mappedPurchases: TransRecord[] = purchasesList.map((p) => {
+			const rawItemsPurchase = dpurList.filter((d) => d.trans_id === p.trans_id);
+			const rawItemsPenjualan = dpList.filter((d) => d.trans_id === p.trans_id);
+
+			let itemDetails: TransDetail[] = [];
+			if (rawItemsPurchase.length > 0) {
+				itemDetails = rawItemsPurchase.map((d) => {
+					const parsed = parseDetailItem(d, p.total_trans, rawItemsPurchase);
+					const oInfo = obatMap.get(d.obat_id);
+					return {
+						...parsed,
+						obat_nama: oInfo?.obat_nama ?? d.obat_id,
+						jenis_nama: oInfo?.jenis_nama ?? '-'
+					};
+				});
+			} else if (rawItemsPenjualan.length > 0) {
+				itemDetails = rawItemsPenjualan.map((d) => {
+					const parsed = parseDetailItem(d, p.total_trans, rawItemsPenjualan);
+					const oInfo = obatMap.get(d.obat_id);
+					return {
+						...parsed,
+						obat_nama: oInfo?.obat_nama ?? d.obat_id,
+						jenis_nama: oInfo?.jenis_nama ?? '-'
+					};
+				});
+			}
+
+			return {
+				trans_id: p.trans_id,
+				tanggal_waktu: parseTransDate(p.trans_id, p.tanggal_waktu),
+				total_trans: Number(p.total_trans) || 0,
+				total_disc: Number(p.total_disc) || 0,
+				bayar: Number(p.total_trans) || 0,
+				kembali: 0,
+				type: 'pembelian',
+				pbf_nama: pbfMap.get(p.pbf_id) ?? p.pbf_id,
+				details: itemDetails
+			};
+		});
+
+		// Combine and sort by date descending
+		const allRecords = [...mappedSales, ...mappedPurchases];
+		allRecords.sort((a, b) => new Date(b.tanggal_waktu).getTime() - new Date(a.tanggal_waktu).getTime());
+
+		transactions = allRecords;
 		loading = false;
 	}
 
 	function getFilteredTransactions(): TransRecord[] {
 		const q = obatQuery.trim().toLowerCase();
-		if (!q) return transactions;
-		return transactions.filter((t) =>
-			t.details.some((d) => d.obat_nama.toLowerCase().includes(q) || d.obat_id.toLowerCase().includes(q))
-		);
+		return transactions.filter((t) => {
+			if (transTypeFilter !== 'all' && t.type !== transTypeFilter) return false;
+			if (!q) return true;
+			const matchTransId = t.trans_id.toLowerCase().includes(q);
+			const matchPbf = t.pbf_nama?.toLowerCase().includes(q) ?? false;
+			const matchObat = t.details.some(
+				(d) => d.obat_nama.toLowerCase().includes(q) || d.obat_id.toLowerCase().includes(q)
+			);
+			return matchTransId || matchPbf || matchObat;
+		});
 	}
 
 	function subtotalBeforeDisc(trans: TransRecord): number {
@@ -173,7 +342,7 @@
 
 <div class="page-header no-print">
 	<h1>🧾 Cetak Nota</h1>
-	<p>Lihat dan cetak ulang nota penjualan</p>
+	<p>Lihat dan cetak ulang nota penjualan & faktur pembelian dari detail transaction (`detail_purchase` / `detail_penjualan`)</p>
 </div>
 
 <!-- Filter Section -->
@@ -188,11 +357,19 @@
 			<input id="date-to" type="date" bind:value={dateTo} />
 		</div>
 		<div class="form-group">
-			<label for="obat-filter">Cari Obat</label>
-			<input id="obat-filter" type="text" bind:value={obatQuery} placeholder="Nama atau kode obat..." />
+			<label for="trans-type">Tipe Transaksi</label>
+			<select id="trans-type" bind:value={transTypeFilter}>
+				<option value="all">Semua Transaksi</option>
+				<option value="penjualan">🛒 Penjualan</option>
+				<option value="pembelian">📦 Pembelian (Faktur)</option>
+			</select>
+		</div>
+		<div class="form-group">
+			<label for="obat-filter">Cari Obat / No. Nota / PBF</label>
+			<input id="obat-filter" type="text" bind:value={obatQuery} placeholder="Nama, kode obat, nota, atau supplier..." />
 		</div>
 		<div class="form-group filter-btn-group">
-			<label>&nbsp;</label>
+			<span class="label-spacer" aria-hidden="true">&nbsp;</span>
 			<button class="btn btn-primary" onclick={loadTransactions} disabled={loading}>
 				{loading ? 'Memuat...' : '🔍 Cari'}
 			</button>
@@ -202,14 +379,14 @@
 
 <!-- Results -->
 <section class="nota-card no-print">
-	<h2>Riwayat Penjualan ({getFilteredTransactions().length} transaksi)</h2>
+	<h2>Riwayat Transaksi ({getFilteredTransactions().length} transaksi)</h2>
 
 	{#if loading}
-		<div class="table-empty">Memuat data...</div>
+		<div class="table-empty">Memuat data transaksi...</div>
 	{:else if getFilteredTransactions().length === 0}
 		<div class="table-empty">
 			<div class="empty-icon">📭</div>
-			<div>Tidak ada transaksi ditemukan</div>
+			<div>Tidak ada transaksi ditemukan untuk filter ini</div>
 		</div>
 	{:else}
 		<div class="trans-list">
@@ -217,34 +394,59 @@
 				<div class="trans-item">
 					<div class="trans-header">
 						<div class="trans-info">
-							<code class="nota-code">{trans.trans_id}</code>
-							<span class="trans-date">{formatTanggal(trans.tanggal_waktu)} · {formatWaktu(trans.tanggal_waktu)}</span>
+							<div class="trans-title-row">
+								<code class="nota-code">{trans.trans_id}</code>
+								{#if trans.type === 'penjualan'}
+									<span class="type-badge badge-sale">🛒 Penjualan</span>
+								{:else}
+									<span class="type-badge badge-purchase">📦 Pembelian (PBF: {trans.pbf_nama ?? '-'})</span>
+								{/if}
+							</div>
+							<span class="trans-date">{formatTanggal(trans.tanggal_waktu)} {formatWaktu(trans.tanggal_waktu)}</span>
 						</div>
 						<div class="trans-summary">
 							<span class="trans-items-count">{trans.details.length} item</span>
 							<span class="trans-total">Rp{formatRp(trans.total_trans)}</span>
-							<button class="btn btn-primary btn-sm" onclick={() => openPrint(trans)}>🖨️ Cetak</button>
+							<button class="btn btn-primary btn-sm" onclick={() => openPrint(trans)}>🖨️ Cetak Nota</button>
 						</div>
 					</div>
 					<div class="trans-details">
 						<table class="mini-table">
-							<thead><tr><th>Obat</th><th>Jenis</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead>
+							<thead>
+								<tr>
+									<th>Obat</th>
+									<th>Jenis</th>
+									<th class="td-center">Qty</th>
+									<th class="td-right">Harga Satuan</th>
+									{#if trans.details.some(d => d.disc > 0)}
+										<th class="td-right">Diskon</th>
+									{/if}
+									<th class="td-right">Total</th>
+								</tr>
+							</thead>
 							<tbody>
 								{#each trans.details as d}
 									<tr>
-										<td><strong>{d.obat_nama}</strong></td>
+										<td><strong>{d.obat_nama}</strong> <span class="obat-code">({d.obat_id})</span></td>
 										<td><span class="jenis-tag">{d.jenis_nama}</span></td>
 										<td class="td-center">{d.qty}</td>
 										<td class="td-right">Rp{formatRp(d.harga_obat)}</td>
-										<td class="td-right"><strong>Rp{formatRp(d.qty * d.harga_obat)}</strong></td>
+										{#if trans.details.some(item => item.disc > 0)}
+											<td class="td-right">{d.disc > 0 ? `${d.disc}%` : '-'}</td>
+										{/if}
+										<td class="td-right"><strong>Rp{formatRp(d.total_line)}</strong></td>
 									</tr>
 								{/each}
 							</tbody>
 						</table>
 						<div class="trans-footer-info">
-							<span>Diskon: Rp{formatRp(trans.total_disc)}</span>
-							<span>Bayar: Rp{formatRp(trans.bayar)}</span>
-							<span>Kembali: Rp{formatRp(trans.kembali)}</span>
+							<span>Subtotal: Rp{formatRp(subtotalBeforeDisc(trans))}</span>
+							<span>Diskon Total: Rp{formatRp(trans.total_disc)}</span>
+							<span>Net Total: Rp{formatRp(trans.total_trans)}</span>
+							{#if trans.type === 'penjualan'}
+								<span>Bayar: Rp{formatRp(trans.bayar)}</span>
+								<span>Kembali: Rp{formatRp(trans.kembali)}</span>
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -258,15 +460,25 @@
 	<div class="print-only print-nota">
 		<div class="print-header">
 			<h2>APOTEK PWA</h2>
-			<p>Nota Penjualan</p>
+			<p>{selectedTrans.type === 'penjualan' ? 'Nota Penjualan' : 'Nota / Bukti Pembelian'}</p>
 		</div>
 		<div class="print-info">
 			<div><strong>No. Nota:</strong> {selectedTrans.trans_id}</div>
 			<div><strong>Tanggal:</strong> {formatTanggal(selectedTrans.tanggal_waktu)} {formatWaktu(selectedTrans.tanggal_waktu)}</div>
+			{#if selectedTrans.type === 'pembelian' && selectedTrans.pbf_nama}
+				<div><strong>Supplier (PBF):</strong> {selectedTrans.pbf_nama}</div>
+			{/if}
 		</div>
 		<table class="print-table">
 			<thead>
-				<tr><th>No</th><th>Nama Obat</th><th>Jenis</th><th>Qty</th><th>Harga</th><th>Total</th></tr>
+				<tr>
+					<th>No</th>
+					<th>Nama Obat</th>
+					<th>Jenis</th>
+					<th class="td-center">Qty</th>
+					<th class="td-right">Harga</th>
+					<th class="td-right">Total</th>
+				</tr>
 			</thead>
 			<tbody>
 				{#each selectedTrans.details as d, i}
@@ -276,7 +488,7 @@
 						<td>{d.jenis_nama}</td>
 						<td class="td-center">{d.qty}</td>
 						<td class="td-right">Rp{formatRp(d.harga_obat)}</td>
-						<td class="td-right">Rp{formatRp(d.qty * d.harga_obat)}</td>
+						<td class="td-right">Rp{formatRp(d.total_line)}</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -287,8 +499,10 @@
 				<div class="print-row"><span>Diskon</span><span>-Rp{formatRp(selectedTrans.total_disc)}</span></div>
 			{/if}
 			<div class="print-row print-grand"><span>Total</span><span>Rp{formatRp(selectedTrans.total_trans)}</span></div>
-			<div class="print-row"><span>Bayar</span><span>Rp{formatRp(selectedTrans.bayar)}</span></div>
-			<div class="print-row"><span>Kembali</span><span>Rp{formatRp(selectedTrans.kembali)}</span></div>
+			{#if selectedTrans.type === 'penjualan'}
+				<div class="print-row"><span>Bayar</span><span>Rp{formatRp(selectedTrans.bayar)}</span></div>
+				<div class="print-row"><span>Kembali</span><span>Rp{formatRp(selectedTrans.kembali)}</span></div>
+			{/if}
 		</div>
 		<div class="print-footer">
 			<p>Terima kasih atas kunjungan Anda</p>
@@ -305,7 +519,7 @@
 	}
 	.nota-card h2 { font-size: 1.05rem; margin-bottom: var(--space-md); }
 	.filter-grid {
-		display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: var(--space-md); align-items: start;
+		display: grid; grid-template-columns: 1fr 1fr 1.2fr 2fr auto; gap: var(--space-md); align-items: start;
 	}
 	.filter-btn-group { display: flex; flex-direction: column; justify-content: flex-end; }
 
@@ -321,10 +535,17 @@
 		padding: var(--space-md); background: var(--color-bg);
 	}
 	.trans-info { display: flex; flex-direction: column; gap: 4px; }
+	.trans-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.nota-code {
 		background: #dbeafe; padding: 2px 8px; border-radius: 4px;
 		color: #1e40af; font-size: .85rem; font-weight: 600;
 	}
+	.type-badge {
+		font-size: .75rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;
+	}
+	.badge-sale { background: #dcfce7; color: #166534; }
+	.badge-purchase { background: #f3e8ff; color: #6b21a8; }
+
 	.trans-date { font-size: .82rem; color: var(--color-text-muted); }
 	.trans-summary { display: flex; align-items: center; gap: var(--space-md); }
 	.trans-items-count {
@@ -335,8 +556,10 @@
 	.trans-details { padding: var(--space-md); }
 	.trans-footer-info {
 		display: flex; gap: var(--space-lg); margin-top: var(--space-sm);
-		font-size: .85rem; color: var(--color-text-secondary);
+		font-size: .85rem; color: var(--color-text-secondary); flex-wrap: wrap;
 	}
+
+	.obat-code { font-size: .75rem; color: var(--color-text-muted); font-weight: normal; }
 
 	/* Mini table */
 	.mini-table { width: 100%; border-collapse: collapse; font-size: .85rem; }

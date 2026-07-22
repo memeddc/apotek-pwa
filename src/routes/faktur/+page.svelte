@@ -221,7 +221,7 @@
 			};
 			const { error: purchaseError } = await supabase.from('purchase').insert({ ...payload, details: undefined });
 			if (purchaseError) throw new Error(purchaseError.message);
-			const detailRows = lines.map((line) => ({ trans_id: transId, obat_id: line.obat_id, qty: qty(line), total_per_obat: hargaSatuan(line), disc: line.disc }));
+			const detailRows = lines.map((line) => ({ trans_id: transId, obat_id: line.obat_id, qty: qty(line), total_per_obat: totalKotor(line), disc: line.disc }));
 			const { error: detailError } = await supabase.from('detail_purchase').insert(detailRows);
 			if (detailError) throw new Error(detailError.message);
 			for (const line of lines) {

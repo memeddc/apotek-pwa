@@ -433,7 +433,7 @@
 			{/if}
 		</div>
 		<div class="form-group add-btn-group">
-			<label>&nbsp;</label>
+			<span class="label-spacer" aria-hidden="true">&nbsp;</span>
 			<button class="btn btn-primary" onclick={tambahItem}>+ Tambah</button>
 		</div>
 	</div>
