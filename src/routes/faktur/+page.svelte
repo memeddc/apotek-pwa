@@ -2,6 +2,15 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import type { IFakturItemInput, IFakturSimpanInput, Iobat, Ipbf } from '$lib/db/types';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { RadioGroup } from '$lib/components/ui/radio-group';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '$lib/components/ui/card';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { FileSpreadsheet, Plus, Search, Trash2, Save, RotateCcw, Building2, Calendar, Pill } from 'lucide-svelte';
 
 	type FakturLine = IFakturItemInput & { obat_nama: string; jenis_nama: string };
 
@@ -15,9 +24,6 @@
 	let saving = $state(false);
 	let obatSearch = $state('');
 	let searchLoading = $state(false);
-	let toastMsg = $state('');
-	let toastType = $state<'success' | 'error'>('success');
-	let toastTimer: ReturnType<typeof setTimeout>;
 
 	function today(): string {
 		const date = new Date();
@@ -27,6 +33,7 @@
 	}
 
 	let header = $state({ pbf_id: '', tanggal: today() });
+	let diberikanValue = $state('0');
 	let item = $state({
 		obat_id: '',
 		jumlah_box: 1,
@@ -37,21 +44,8 @@
 		diberikan: 0 as 0 | 1
 	});
 
-	function showToast(message: string, type: 'success' | 'error' = 'success') {
-		toastMsg = message;
-		toastType = type;
-		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toastMsg = ''), 4000);
-	}
-
 	function number(value: number): string {
 		return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(value || 0);
-	}
-
-	function formatTanggal(tanggal: string): string {
-		const [year, month, day] = tanggal.split('-').map(Number);
-		const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-		return `${day} ${months[month - 1]} ${year}`;
 	}
 
 	function hargaSatuan(line: Pick<FakturLine, 'harga_per_box' | 'isi_per_box'>): number {
@@ -85,7 +79,7 @@
 	async function loadInitialData() {
 		loading = true;
 		const { data, error } = await supabase.from('pbf').select('*').order('pbf_nama');
-		if (error) showToast(`Gagal memuat PBF: ${error.message}`, 'error');
+		if (error) toast.error(`Gagal memuat PBF: ${error.message}`);
 		else pbfList = data ?? [];
 		loading = false;
 	}
@@ -100,11 +94,6 @@
 		selectedPbf = pbf;
 		header.pbf_id = pbf.pbf_id;
 		pbfSearch = pbf.pbf_nama;
-	}
-
-	function resetPbfSearch() {
-		selectedPbf = null;
-		header.pbf_id = '';
 	}
 
 	let searchRequest = 0;
@@ -128,7 +117,7 @@
 		if (request !== searchRequest) return;
 		searchLoading = false;
 		if (error) {
-			showToast(`Gagal mencari obat: ${error.message}`, 'error');
+			toast.error(`Gagal mencari obat: ${error.message}`);
 			return;
 		}
 		obatResults = (data ?? []) as Iobat[];
@@ -143,6 +132,7 @@
 
 	function resetItem() {
 		item = { obat_id: '', jumlah_box: 1, isi_per_box: 1, harga_per_box: 0, disc: 0, expired_date: '', diberikan: 0 };
+		diberikanValue = '0';
 		selectedObat = null;
 		obatSearch = '';
 		obatResults = [];
@@ -151,19 +141,19 @@
 	function tambahItem() {
 		const obat = selectedObat;
 		if (!obat) {
-			showToast('Pilih obat dari hasil pencarian.', 'error');
+			toast.error('Pilih obat dari hasil pencarian.');
 			return;
 		}
 		if (item.jumlah_box <= 0 || item.isi_per_box <= 0 || item.harga_per_box < 0) {
-			showToast('Jumlah box, isi per box, dan harga per box harus valid.', 'error');
+			toast.error('Jumlah box, isi per box, dan harga per box harus valid.');
 			return;
 		}
 		if (!item.expired_date) {
-			showToast('Tanggal kedaluwarsa wajib diisi.', 'error');
+			toast.error('Tanggal kedaluwarsa wajib diisi.');
 			return;
 		}
 		if (lines.some((line) => line.obat_id === obat.obat_id)) {
-			showToast('Obat yang sama sudah ada dalam faktur.', 'error');
+			toast.error('Obat yang sama sudah ada dalam faktur.');
 			return;
 		}
 		lines = [...lines, { ...item, obat_nama: obat.obat_nama, jenis_nama: obat.jenis_id }];
@@ -203,11 +193,11 @@
 
 	async function simpanFaktur() {
 		if (!header.pbf_id || !header.tanggal) {
-			showToast('Tanggal dan PBF wajib diisi.', 'error');
+			toast.error('Tanggal dan PBF wajib diisi.');
 			return;
 		}
 		if (lines.length === 0) {
-			showToast('Tambahkan minimal satu obat ke faktur.', 'error');
+			toast.error('Tambahkan minimal satu obat ke faktur.');
 			return;
 		}
 
@@ -233,10 +223,10 @@
 			}
 			const { error: kartuError } = await supabase.from('kartu_stok').insert(lines.map((line) => ({ obat_id: line.obat_id, qty: qty(line), trans_id: transId, tanggal_waktu: payload.tanggal_waktu })));
 			if (kartuError) throw new Error(kartuError.message);
-			showToast(`Faktur ${transId} berhasil tersimpan.`);
+			toast.success(`Faktur ${transId} berhasil tersimpan.`);
 			resetFaktur();
 		} catch (error) {
-			showToast(`Faktur gagal disimpan: ${error instanceof Error ? error.message : 'Terjadi kesalahan.'}`, 'error');
+			toast.error(`Faktur gagal disimpan: ${error instanceof Error ? error.message : 'Terjadi kesalahan.'}`);
 		} finally {
 			saving = false;
 		}
@@ -245,97 +235,234 @@
 	onMount(loadInitialData);
 </script>
 
-<div class="page-header">
-	<h1>Faktur</h1>
-	<p>Penerimaan obat dari PBF. PPN tidak dihitung pada modul ini.</p>
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<FileSpreadsheet class="w-6 h-6 text-teal-600" />
+				Faktur Pembelian PBF
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Pencatatan penerimaan stok obat baru dari distributor (PBF)</p>
+		</div>
+	</div>
+
+	<!-- Header Form Card (Supplier & Date) -->
+	<Card class="border-slate-200 shadow-sm bg-gradient-to-r from-teal-50/50 to-white">
+		<CardContent class="pt-6">
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+				<!-- Tanggal Faktur -->
+				<div class="space-y-1.5">
+					<label for="faktur-date" class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+						<Calendar class="w-3.5 h-3.5 text-teal-600" /> Tanggal Faktur
+					</label>
+					<Input id="faktur-date" type="date" bind:value={header.tanggal} class="text-xs h-10" />
+				</div>
+
+				<!-- PBF Selector -->
+				<div class="space-y-1.5 relative">
+					<label for="pbf-search" class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+						<Building2 class="w-3.5 h-3.5 text-teal-600" /> PBF / Supplier *
+					</label>
+					<div class="relative">
+						<Input
+							id="pbf-search"
+							type="text"
+							placeholder="Cari & pilih PBF..."
+							bind:value={pbfSearch}
+							class="text-xs h-10"
+						/>
+						{#if filteredPbf().length > 0}
+							<div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl max-h-48 overflow-y-auto z-30 divide-y divide-slate-100">
+								{#each filteredPbf() as pbf}
+									<button
+										type="button"
+										onclick={() => pilihPbf(pbf)}
+										class="w-full text-left p-2.5 hover:bg-teal-50 text-xs flex justify-between cursor-pointer"
+									>
+										<span class="font-semibold text-slate-900">{pbf.pbf_nama}</span>
+										<Badge variant="secondary" class="text-[10px]">{pbf.pbf_id}</Badge>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
+			</div>
+		</CardContent>
+	</Card>
+
+	<!-- Add Items Form Card -->
+	<Card class="border-slate-200 shadow-sm">
+		<CardHeader class="pb-3 border-b border-slate-100">
+			<CardTitle class="text-sm font-semibold text-slate-800 flex items-center gap-2">
+				<Plus class="w-4 h-4 text-teal-600" /> Tambah Item Obat ke Faktur
+			</CardTitle>
+		</CardHeader>
+		<CardContent class="pt-4">
+			<div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+
+				<!-- Search Obat (Cols 4) -->
+				<div class="sm:col-span-4 space-y-1 relative">
+					<label for="search-obat-faktur" class="text-xs font-semibold text-slate-600">Cari Obat</label>
+					<div class="relative">
+						<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+						<Input
+							id="search-obat-faktur"
+							type="text"
+							placeholder="Nama / kode obat..."
+							bind:value={obatSearch}
+							oninput={searchObat}
+							class="pl-9 text-xs"
+						/>
+					</div>
+					{#if searchLoading}
+						<div class="absolute left-0 right-0 top-full mt-1 bg-white p-2 rounded-lg border border-slate-200 text-xs text-slate-400 z-20">
+							Mencari...
+						</div>
+					{:else if obatResults.length > 0}
+						<div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl max-h-48 overflow-y-auto z-30 divide-y divide-slate-100">
+							{#each obatResults as o}
+								<button
+									type="button"
+									onclick={() => pilihObat(o)}
+									class="w-full text-left p-2.5 hover:bg-teal-50 text-xs flex justify-between cursor-pointer"
+								>
+									<span class="font-semibold text-slate-900">{o.obat_nama}</span>
+									<span class="text-[10px] text-slate-400">{o.obat_id}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<!-- Jml Box (Cols 2) -->
+				<div class="sm:col-span-2 space-y-1">
+					<label for="jml-box" class="text-xs font-semibold text-slate-600">Jml Box</label>
+					<Input id="jml-box" type="number" min="1" bind:value={item.jumlah_box} class="text-xs text-center" />
+				</div>
+
+				<!-- Isi / Box (Cols 2) -->
+				<div class="sm:col-span-2 space-y-1">
+					<label for="isi-box" class="text-xs font-semibold text-slate-600">Isi/Box</label>
+					<Input id="isi-box" type="number" min="1" bind:value={item.isi_per_box} class="text-xs text-center" />
+				</div>
+
+				<!-- Harga / Box (Cols 2) -->
+				<div class="sm:col-span-2 space-y-1">
+					<label for="harga-box" class="text-xs font-semibold text-slate-600">Harga/Box (Rp)</label>
+					<Input id="harga-box" type="number" min="0" bind:value={item.harga_per_box} class="text-xs text-right" />
+				</div>
+
+				<!-- Disc % (Cols 2) -->
+				<div class="sm:col-span-2 space-y-1">
+					<label for="disc-item" class="text-xs font-semibold text-slate-600">Disc (%)</label>
+					<Input id="disc-item" type="number" min="0" max="100" step="0.1" bind:value={item.disc} class="text-xs text-center" />
+				</div>
+			</div>
+
+			<div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end mt-3 pt-3 border-t border-slate-100">
+				<!-- Tgl Expired (Cols 4) -->
+				<div class="sm:col-span-4 space-y-1">
+					<label for="exp-date" class="text-xs font-semibold text-slate-600">Tgl Kedaluwarsa *</label>
+					<Input id="exp-date" type="date" bind:value={item.expired_date} class="text-xs" />
+				</div>
+
+				<!-- Diberikan Radio (Cols 4) -->
+				<div class="sm:col-span-4 space-y-1">
+					<span class="text-xs font-semibold text-slate-600 block">Status Diskon</span>
+					<div class="flex items-center h-9">
+						<RadioGroup
+							name="diberikan"
+							bind:value={diberikanValue}
+							onValueChange={(v) => (item.diberikan = Number(v) as 0 | 1)}
+							options={[
+								{ value: '1', label: 'Diberikan (✓)' },
+								{ value: '0', label: 'Tidak (✗)' }
+							]}
+						/>
+					</div>
+				</div>
+
+				<!-- Add Button (Cols 4) -->
+				<div class="sm:col-span-4 flex justify-end">
+					<Button size="sm" onclick={tambahItem} class="w-full sm:w-auto">
+						<Plus class="w-4 h-4 mr-1" /> Tambah Obat
+					</Button>
+				</div>
+			</div>
+		</CardContent>
+	</Card>
+
+	<!-- Table Added Items Card -->
+	<Card class="border-slate-200 shadow-sm">
+		<CardHeader class="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+			<CardTitle class="text-sm font-semibold text-slate-800">Daftar Item Faktur</CardTitle>
+			<div class="text-xs font-bold text-teal-700">
+				Total Faktur: Rp{number(totalFaktur())}
+			</div>
+		</CardHeader>
+		<CardContent class="p-0">
+			<Table>
+				<TableHeader>
+					<TableRow>
+						<TableHead class="w-12 text-center">No.</TableHead>
+						<TableHead>Nama Obat</TableHead>
+						<TableHead class="text-center">Jml Box</TableHead>
+						<TableHead class="text-center">Isi/Box</TableHead>
+						<TableHead class="text-right">Harga Satuan</TableHead>
+						<TableHead class="text-center">Disc (%)</TableHead>
+						<TableHead class="text-right">Total Net</TableHead>
+						<TableHead class="w-12"></TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{#if lines.length === 0}
+						<TableRow>
+							<TableCell colspan={8} class="text-center py-8 text-slate-400 text-xs">
+								Belum ada obat dimasukkan ke faktur.
+							</TableCell>
+						</TableRow>
+					{:else}
+						{#each lines as line, i}
+							<TableRow>
+								<TableCell class="text-center text-xs text-slate-400">{i + 1}</TableCell>
+								<TableCell class="font-semibold text-slate-900 text-xs">
+									{line.obat_nama}
+									<span class="block text-[10px] text-slate-400 font-normal">Exp: {line.expired_date}</span>
+								</TableCell>
+								<TableCell class="text-center text-xs">{line.jumlah_box}</TableCell>
+								<TableCell class="text-center text-xs">{line.isi_per_box}</TableCell>
+								<TableCell class="text-right text-xs">Rp{number(hargaSatuan(line))}</TableCell>
+								<TableCell class="text-center text-xs">{line.disc}%</TableCell>
+								<TableCell class="text-right font-bold text-xs text-teal-700">
+									Rp{number(totalBaris(line))}
+								</TableCell>
+								<TableCell class="text-center">
+									<Button variant="ghost" size="icon" class="h-7 w-7 text-red-500 hover:bg-red-50" onclick={() => hapusItem(line.obat_id)}>
+										<Trash2 class="w-3.5 h-3.5" />
+									</Button>
+								</TableCell>
+							</TableRow>
+						{/each}
+					{/if}
+				</TableBody>
+			</Table>
+		</CardContent>
+
+		<CardFooter class="flex items-center justify-between pt-4 border-t border-slate-100">
+			<Button variant="ghost" size="sm" onclick={resetFaktur} disabled={saving}>
+				<RotateCcw class="w-3.5 h-3.5 mr-1" /> Reset Faktur
+			</Button>
+
+			<Button size="sm" onclick={simpanFaktur} disabled={saving || lines.length === 0 || !header.pbf_id}>
+				{#if saving}
+					Menyimpan...
+				{:else}
+					<Save class="w-3.5 h-3.5 mr-1" /> Simpan Faktur
+				{/if}
+			</Button>
+		</CardFooter>
+	</Card>
 </div>
-
-<section class="faktur-card">
-	<div class="faktur-grid">
-		<div class="form-group">
-			<label for="tanggal-faktur">Tanggal Faktur</label>
-			<input id="tanggal-faktur" type="date" bind:value={header.tanggal} />
-			<small>{formatTanggal(header.tanggal)}</small>
-		</div>
-		<div class="form-group faktur-pbf">
-			<label for="pbf">PBF / Supplier</label>
-			<input id="pbf" bind:value={pbfSearch} oninput={resetPbfSearch} disabled={loading} autocomplete="off" placeholder="Ketik nama PBF" />
-			{#if !selectedPbf && filteredPbf().length > 0}
-				<div class="search-results pbf-results">
-					{#each filteredPbf() as pbf}
-						<button type="button" onclick={() => pilihPbf(pbf)}><strong>{pbf.pbf_nama}</strong><span>{pbf.pbf_id}</span></button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	</div>
-</section>
-
-<section class="faktur-card">
-	<h2>Tambah Obat</h2>
-	<div class="obat-search">
-		<div class="form-group">
-			<label for="cari-obat">Nama Obat</label>
-			<input id="cari-obat" bind:value={obatSearch} oninput={searchObat} autocomplete="off" placeholder="Ketik minimal 2 huruf untuk mencari obat" />
-			{#if searchLoading}<small>Mencari obat...</small>{/if}
-			{#if obatResults.length > 0}
-				<div class="search-results">
-					{#each obatResults as obat}
-						<button type="button" onclick={() => pilihObat(obat)}><strong>{obat.obat_nama}</strong><span>{obat.obat_id}</span></button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	</div>
-	<div class="item-grid">
-		<div class="form-group"><label for="jumlah-box">Jumlah Box</label><input id="jumlah-box" type="number" min="1" step="1" bind:value={item.jumlah_box} /></div>
-		<div class="form-group"><label for="isi-box">Isi / Box</label><input id="isi-box" type="number" min="1" step="1" bind:value={item.isi_per_box} /></div>
-		<div class="form-group"><label for="harga-box">Harga / Box</label><input id="harga-box" type="number" min="0" step="0.01" bind:value={item.harga_per_box} /></div>
-		<div class="form-group"><label for="diskon">Diskon (%)</label><input id="diskon" type="number" min="0" max="100" step="0.01" bind:value={item.disc} /></div>
-		<div class="form-group"><label for="expired">Kedaluwarsa</label><input id="expired" type="date" bind:value={item.expired_date} /></div>
-		<div class="form-group checkbox-group"><label for="diberikan">Diberikan</label><label class="checkbox-label"><input id="diberikan" type="checkbox" checked={item.diberikan === 1} onchange={(event) => (item.diberikan = event.currentTarget.checked ? 1 : 0)} /> Diberikan</label></div>
-	</div>
-	<div class="calculation">Qty satuan: <strong>{number(item.jumlah_box * item.isi_per_box)}</strong> &middot; Harga satuan: <strong>Rp {number(hargaSatuan(item))}</strong></div>
-	<div class="add-row"><button class="btn btn-primary" type="button" onclick={tambahItem}>+ Tambahkan ke Faktur</button></div>
-</section>
-
-<section class="faktur-card">
-	<div class="table-title"><h2>Detail Faktur</h2><strong>Total Faktur: Rp {number(totalFaktur())}</strong></div>
-	<div class="data-table-wrapper">
-		<table class="data-table faktur-table">
-			<thead><tr><th>Obat</th><th>Qty</th><th>Harga / Sat</th><th>Diskon</th><th>Total</th><th></th></tr></thead>
-			<tbody>
-				{#if lines.length === 0}<tr><td colspan="6" class="table-empty">Belum ada obat pada faktur.</td></tr>{/if}
-				{#each lines as line}
-					<tr><td><strong>{line.obat_nama}</strong><br /><small>{line.obat_id} · {line.jumlah_box} box × {line.isi_per_box}</small></td><td>{number(qty(line))}</td><td>Rp {number(hargaSatuan(line))}</td><td>{number(line.disc)}%<br /><small>Rp {number(diskonRupiah(line))}</small></td><td><strong>Rp {number(totalBaris(line))}</strong></td><td><button class="btn btn-danger-ghost btn-sm" type="button" title="Hapus obat" aria-label="Hapus {line.obat_nama}" onclick={() => hapusItem(line.obat_id)}>🗑️</button></td></tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-	<div class="faktur-actions"><button class="btn btn-ghost" type="button" onclick={resetFaktur} disabled={saving}>Kosongkan</button><button class="btn btn-primary" type="button" onclick={simpanFaktur} disabled={saving || loading}>{saving ? 'Menyimpan...' : 'Simpan Faktur'}</button></div>
-</section>
-
-{#if toastMsg}<div class="toast {toastType === 'success' ? 'toast-success' : 'toast-error'}">{toastMsg}</div>{/if}
-
-<style>
-	.faktur-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-lg); }
-	.faktur-card h2 { font-size: 1.05rem; margin-bottom: var(--space-md); }
-	.faktur-grid, .item-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
-	.item-grid { grid-template-columns: repeat(6, minmax(115px, 1fr)); }
-	.faktur-pbf { grid-column: span 1; position: relative; }
-	.obat-search { max-width: 620px; position: relative; }
-	.search-results { position: absolute; width: 100%; max-height: 250px; overflow-y: auto; z-index: 5; background: white; border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
-	.pbf-results { position: absolute; }
-	.search-results button { width: 100%; border: 0; background: white; text-align: left; padding: .55rem .75rem; cursor: pointer; display: flex; justify-content: space-between; gap: 1rem; }
-	.search-results button:hover { background: var(--color-primary-50); }
-	.search-results span, small { color: var(--color-text-muted); font-size: .78rem; }
-	.calculation { color: var(--color-text-secondary); font-size: .88rem; margin-top: .25rem; }
-	.checkbox-group { display: flex; flex-direction: column; }
-	.checkbox-label { display: flex; align-items: center; gap: .5rem; min-height: 38px; color: var(--color-text); font-size: .9rem; text-transform: none; letter-spacing: 0; }
-	.checkbox-label input { width: auto; }
-	.add-row, .faktur-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-md); }
-	.table-title { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); margin-bottom: var(--space-md); }
-	.table-title h2 { margin: 0; }
-	@media (max-width: 900px) { .item-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-	@media (max-width: 600px) { .faktur-grid, .item-grid { grid-template-columns: 1fr; } .faktur-table { min-width: 700px; } }
-</style>

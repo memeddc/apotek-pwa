@@ -2,6 +2,15 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import type { Iobat } from '$lib/db/types';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Select } from '$lib/components/ui/select';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Sheet } from '$lib/components/ui/sheet';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { DollarSign, Search, RotateCcw, Edit2, Save, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-svelte';
 
 	type StokRow = {
 		obat_id: string;
@@ -19,24 +28,15 @@
 	let searchQuery = $state('');
 	let currentPage = $state(1);
 	let pageSize = $state(100);
+	let pageSizeStr = $state('100');
 	let totalCount = $state(0);
 	let searchTimer: ReturnType<typeof setTimeout>;
 
-	let toastMsg = $state('');
-	let toastType = $state<'success' | 'error'>('success');
-	let toastTimer: ReturnType<typeof setTimeout>;
-
-	// Edit modal
-	let showModal = $state(false);
+	// Sheet state
+	let showSheet = $state(false);
 	let editTarget = $state<StokRow | null>(null);
 	let newHargaPbf = $state(0);
 	let newHargaJual = $state(0);
-
-	function showToast(msg: string, type: 'success' | 'error' = 'success') {
-		toastMsg = msg; toastType = type;
-		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toastMsg = ''), 4000);
-	}
 
 	function formatRp(v: number): string {
 		return new Intl.NumberFormat('id-ID').format(Math.round(v));
@@ -59,7 +59,7 @@
 		const { data: obatData, count, error: obatError } = await query.range(from, from + pageSize - 1);
 
 		if (obatError) {
-			showToast(`Gagal memuat data: ${obatError.message}`, 'error');
+			toast.error(`Gagal memuat data: ${obatError.message}`);
 			stokList = [];
 			totalCount = 0;
 			loading = false;
@@ -134,16 +134,15 @@
 		editTarget = item;
 		newHargaPbf = item.harga_pbf;
 		newHargaJual = item.harga_jual;
-		showModal = true;
+		showSheet = true;
 	}
 
 	async function handleSave() {
 		if (!editTarget) return;
-		if (newHargaPbf < 0 || newHargaJual < 0) { showToast('Harga tidak boleh negatif.', 'error'); return; }
+		if (newHargaPbf < 0 || newHargaJual < 0) { toast.error('Harga tidak boleh negatif.'); return; }
 
 		saving = true;
 		
-		// Check if stok exists
 		const { data: existingStok } = await supabase.from('stok').select('obat_id').eq('obat_id', editTarget.obat_id).maybeSingle();
 		
 		let error;
@@ -168,10 +167,10 @@
 		}
 
 		if (error) { 
-			showToast(`Gagal menyimpan: ${error.message}`, 'error'); 
+			toast.error(`Gagal menyimpan: ${error.message}`); 
 		} else {
-			showToast(`Harga ${editTarget.obat_nama} berhasil diubah`);
-			showModal = false;
+			toast.success(`Harga ${editTarget.obat_nama} berhasil diubah`);
+			showSheet = false;
 			await loadData();
 		}
 		saving = false;
@@ -185,200 +184,208 @@
 	onMount(loadData);
 </script>
 
-<div class="page-header">
-	<h1>💲 Rubah Harga</h1>
-	<p>Ubah harga PBF dan harga jual obat</p>
-</div>
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<DollarSign class="w-6 h-6 text-teal-600" />
+				Penyesuaian Harga
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Kelola harga pokok PBF dan harga jual obat ke konsumen</p>
+		</div>
 
-<!-- Search & Pagination Top -->
-<div class="crud-toolbar">
-	<div class="search-box">
-		<span class="search-icon">⌕</span>
-		<input type="search" placeholder="Cari nama atau kode obat..." bind:value={searchQuery} oninput={handleSearch} />
+		<Button variant="outline" size="sm" onclick={loadData} disabled={loading}>
+			<RotateCcw class="w-3.5 h-3.5 mr-1.5" /> Refresh
+		</Button>
 	</div>
-	<div class="page-size">
-		<label for="page-size">Tampil</label>
-		<select id="page-size" value={pageSize} onchange={changePageSize}>
-			<option value="100">100</option>
-			<option value="500">500</option>
-			<option value="1000">1000</option>
-		</select>
-	</div>
-	<button class="btn btn-ghost" onclick={loadData} disabled={loading}>🔄 Refresh</button>
-</div>
 
-<!-- Table -->
-<div class="data-table-wrapper">
-	<table class="data-table harga-table">
-		<thead>
-			<tr>
-				<th>Kode</th>
-				<th>Nama Obat</th>
-				<th>Jenis</th>
-				<th>Stok</th>
-				<th>Harga PBF</th>
-				<th>Harga Jual</th>
-				<th>Margin</th>
-				<th>Diskon</th>
-				<th>Aksi</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#if loading}
-				<tr><td colspan="9" class="table-empty">Memuat data...</td></tr>
-			{:else if stokList.length === 0}
-				<tr><td colspan="9" class="table-empty">
-					<div class="empty-icon">📭</div>
-					<div>Tidak ada data ditemukan</div>
-				</td></tr>
-			{:else}
-				{#each stokList as item}
-					<tr>
-						<td><code class="obat-code">{item.obat_id}</code></td>
-						<td><strong>{item.obat_nama}</strong></td>
-						<td><span class="jenis-badge">{item.jenis_nama}</span></td>
-						<td class="td-center">{item.qty}</td>
-						<td class="td-right">Rp{formatRp(item.harga_pbf)}</td>
-						<td class="td-right"><strong>Rp{formatRp(item.harga_jual)}</strong></td>
-						<td class="td-center">
-							<span class="margin-badge" class:margin-good={selisih(item) >= 10} class:margin-low={selisih(item) > 0 && selisih(item) < 10} class:margin-zero={selisih(item) <= 0}>
-								{selisih(item)}%
-							</span>
-						</td>
-						<td class="td-center">
-							{#if item.diberikan === 1}
-								<span class="diberikan-yes">✓</span>
-							{:else}
-								<span class="diberikan-no">✗</span>
-							{/if}
-						</td>
-						<td>
-							<button class="btn btn-primary btn-sm" onclick={() => openEdit(item)}>✏️ Ubah</button>
-						</td>
-					</tr>
-				{/each}
-			{/if}
-		</tbody>
-	</table>
-</div>
-
-<div class="pagination">
-	<span>{totalCount.toLocaleString('id-ID')} obat · Halaman {currentPage} dari {totalPages()}</span>
-	<div>
-		<button class="btn btn-ghost" disabled={loading || currentPage === 1} onclick={previousPage}>Sebelumnya</button>
-		<button class="btn btn-ghost" disabled={loading || currentPage === totalPages()} onclick={nextPage}>Berikutnya</button>
-	</div>
-</div>
-
-<!-- Edit Modal -->
-{#if showModal && editTarget}
-	<div class="modal-overlay" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) showModal = false; }}>
-		<div class="modal-box" role="dialog" aria-modal="true" tabindex="-1">
-			<h2>Ubah Harga</h2>
-			<div class="edit-obat-info">
-				<code class="obat-code">{editTarget.obat_id}</code>
-				<strong>{editTarget.obat_nama}</strong>
-				<span class="jenis-badge">{editTarget.jenis_nama}</span>
+	<!-- Toolbar & Search -->
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<div class="flex flex-wrap items-center gap-3 flex-1">
+			<div class="relative min-w-[240px] max-w-xs">
+				<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+				<Input
+					type="search"
+					placeholder="Cari nama atau kode obat..."
+					bind:value={searchQuery}
+					oninput={handleSearch}
+					class="pl-9"
+				/>
 			</div>
 
-			<div class="price-compare">
-				<div class="price-card price-current">
-					<span class="price-label">Harga Saat Ini</span>
-					<div class="price-row"><span>PBF:</span><span>Rp{formatRp(editTarget.harga_pbf)}</span></div>
-					<div class="price-row"><span>Jual:</span><span>Rp{formatRp(editTarget.harga_jual)}</span></div>
-				</div>
-				<div class="price-arrow">→</div>
-				<div class="price-card price-new">
-					<span class="price-label">Harga Baru</span>
-					<div class="price-row"><span>PBF:</span><span>Rp{formatRp(newHargaPbf)}</span></div>
-					<div class="price-row"><span>Jual:</span><span>Rp{formatRp(newHargaJual)}</span></div>
-				</div>
-			</div>
+			<Select
+				bind:value={pageSizeStr}
+				onValueChange={(val) => { pageSize = Number(val); currentPage = 1; loadData(); }}
+				options={[
+					{ value: '100', label: '100 / Hal' },
+					{ value: '500', label: '500 / Hal' },
+					{ value: '1000', label: '1000 / Hal' }
+				]}
+				class="w-32"
+			/>
+		</div>
 
-			<div class="form-group">
-				<label for="new-harga-pbf">Harga PBF Baru</label>
-				<input id="new-harga-pbf" type="number" min="0" bind:value={newHargaPbf} />
-			</div>
-			<div class="form-group">
-				<label for="new-harga-jual">Harga Jual Baru</label>
-				<input id="new-harga-jual" type="number" min="0" bind:value={newHargaJual} />
-			</div>
-
-			{#if newHargaPbf > 0}
-				<div class="new-margin-info">
-					Margin baru: <strong>{Math.round(((newHargaJual - newHargaPbf) / newHargaPbf) * 100)}%</strong>
-					(selisih Rp{formatRp(newHargaJual - newHargaPbf)})
-				</div>
-			{/if}
-
-			<div class="modal-footer">
-				<button class="btn btn-ghost" onclick={() => (showModal = false)}>Batal</button>
-				<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
-					{saving ? 'Menyimpan...' : '💾 Simpan'}
-				</button>
-			</div>
+		<div class="text-xs text-slate-500 font-medium">
+			Total: <strong>{totalCount.toLocaleString('id-ID')}</strong> obat
 		</div>
 	</div>
-{/if}
 
-{#if toastMsg}<div class="toast {toastType === 'success' ? 'toast-success' : 'toast-error'}">{toastMsg}</div>{/if}
+	<!-- Data Table -->
+	<Table>
+		<TableHeader>
+			<TableRow>
+				<TableHead class="w-28">Kode</TableHead>
+				<TableHead>Nama Obat</TableHead>
+				<TableHead>Jenis</TableHead>
+				<TableHead class="text-center">Stok</TableHead>
+				<TableHead class="text-right">Harga PBF</TableHead>
+				<TableHead class="text-right">Harga Jual</TableHead>
+				<TableHead class="text-center">Margin (%)</TableHead>
+				<TableHead class="text-center">Disc PBF</TableHead>
+				<TableHead class="w-24 text-right">Aksi</TableHead>
+			</TableRow>
+		</TableHeader>
+		<TableBody>
+			{#if loading}
+				{#each Array(6) as _}
+					<TableRow>
+						<TableCell><Skeleton class="h-5 w-16" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-40" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-12 mx-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-14 mx-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-12 mx-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-16 ml-auto" /></TableCell>
+					</TableRow>
+				{/each}
+			{:else if stokList.length === 0}
+				<TableRow>
+					<TableCell colspan={9} class="text-center py-8 text-slate-400 text-xs">
+						Tidak ada data obat ditemukan.
+					</TableCell>
+				</TableRow>
+			{:else}
+				{#each stokList as item}
+					<TableRow>
+						<TableCell>
+							<Badge variant="secondary" class="font-mono text-xs text-purple-700 bg-purple-50">{item.obat_id}</Badge>
+						</TableCell>
+						<TableCell class="font-semibold text-slate-900 text-xs">{item.obat_nama}</TableCell>
+						<TableCell>
+							<Badge variant="outline" class="text-[11px] font-normal">{item.jenis_nama}</Badge>
+						</TableCell>
+						<TableCell class="text-center text-xs font-bold">{item.qty}</TableCell>
+						<TableCell class="text-right text-xs text-slate-600">Rp{formatRp(item.harga_pbf)}</TableCell>
+						<TableCell class="text-right text-xs font-bold text-teal-700">Rp{formatRp(item.harga_jual)}</TableCell>
+						<TableCell class="text-center">
+							{#if selisih(item) >= 10}
+								<Badge variant="success" class="text-[10px]">{selisih(item)}%</Badge>
+							{:else if selisih(item) > 0}
+								<Badge variant="warning" class="text-[10px]">{selisih(item)}%</Badge>
+							{:else}
+								<Badge variant="destructive" class="text-[10px]">{selisih(item)}%</Badge>
+							{/if}
+						</TableCell>
+						<TableCell class="text-center">
+							{#if item.diberikan === 1}
+								<Badge variant="success" class="text-[10px]">✓ Ada</Badge>
+							{:else}
+								<span class="text-slate-400 text-xs">✗</span>
+							{/if}
+						</TableCell>
+						<TableCell class="text-right">
+							<Button size="sm" variant="outline" class="h-7 text-xs hover:bg-teal-50 hover:text-teal-700" onclick={() => openEdit(item)}>
+								<Edit2 class="w-3 h-3 mr-1" /> Ubah
+							</Button>
+						</TableCell>
+					</TableRow>
+				{/each}
+			{/if}
+		</TableBody>
+	</Table>
 
-<style>
-	.page-size { display: flex; align-items: center; gap: .4rem; color: var(--color-text-secondary); font-size: .85rem; }
-	.page-size select { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-sm); font: inherit; background: var(--color-surface); }
-	.harga-table { min-width: 900px; }
-	.obat-code { background: #ede9fe; padding: 2px 8px; border-radius: 4px; color: #6d28d9; font-size: .82rem; }
-	.jenis-badge { background: var(--color-primary-50); color: var(--color-primary-dark); padding: 2px 8px; border-radius: 10px; font-size: .78rem; font-weight: 500; }
-	.td-center { text-align: center; }
-	.td-right { text-align: right; font-variant-numeric: tabular-nums; }
-	.table-empty { text-align: center; padding: var(--space-2xl); color: var(--color-text-muted); }
-	.empty-icon { font-size: 2rem; margin-bottom: var(--space-sm); }
-	.pagination { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); margin-top: var(--space-md); color: var(--color-text-secondary); font-size: .85rem; }
-	.pagination div { display: flex; gap: var(--space-xs); }
+	<!-- Pagination Bar -->
+	<div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-2">
+		<div>
+			Halaman <strong>{currentPage}</strong> dari <strong>{totalPages()}</strong>
+		</div>
+		<div class="flex items-center gap-2">
+			<Button variant="outline" size="sm" disabled={loading || currentPage === 1} onclick={previousPage}>
+				<ChevronLeft class="w-4 h-4 mr-1" /> Sebelumnya
+			</Button>
+			<Button variant="outline" size="sm" disabled={loading || currentPage === totalPages()} onclick={nextPage}>
+				Berikutnya <ChevronRight class="w-4 h-4 ml-1" />
+			</Button>
+		</div>
+	</div>
+</div>
 
-	/* Margin badge */
-	.margin-badge { padding: 2px 8px; border-radius: 12px; font-size: .78rem; font-weight: 600; }
-	.margin-good { background: var(--color-success-light); color: var(--color-success); }
-	.margin-low { background: var(--color-warning-light); color: #92400e; }
-	.margin-zero { background: var(--color-danger-light); color: var(--color-danger); }
+<!-- Slide-in Sheet Form -->
+<Sheet
+	bind:open={showSheet}
+	title="Ubah Harga Obat"
+	description="Sesuaikan harga pokok PBF dan harga jual obat."
+>
+	{#if editTarget}
+		<div class="space-y-5 pt-2">
 
-	/* Diberikan */
-	.diberikan-yes { color: var(--color-success); font-weight: 700; }
-	.diberikan-no { color: var(--color-text-muted); }
+			<!-- Target Info Banner -->
+			<div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+				<div>
+					<span class="font-bold text-slate-900 block">{editTarget.obat_nama}</span>
+					<span class="text-slate-400 font-mono text-[10px]">{editTarget.obat_id} · {editTarget.jenis_nama}</span>
+				</div>
+				<Badge variant="secondary">Stok: {editTarget.qty}</Badge>
+			</div>
 
-	/* Edit modal */
-	.edit-obat-info {
-		display: flex; align-items: center; gap: var(--space-sm);
-		padding: var(--space-md); background: var(--color-bg);
-		border-radius: var(--radius-md); margin-bottom: var(--space-lg);
-	}
+			<!-- Price Compare Box -->
+			<div class="grid grid-cols-2 gap-3 p-3 rounded-xl bg-teal-50/50 border border-teal-100 text-xs">
+				<div class="space-y-1">
+					<span class="text-[10px] font-semibold text-slate-400 uppercase">Harga Saat Ini</span>
+					<div class="text-slate-600">PBF: Rp{formatRp(editTarget.harga_pbf)}</div>
+					<div class="font-bold text-slate-900">Jual: Rp{formatRp(editTarget.harga_jual)}</div>
+				</div>
 
-	.price-compare {
-		display: flex; align-items: center; gap: var(--space-md);
-		margin-bottom: var(--space-lg);
-	}
-	.price-card {
-		flex: 1; padding: var(--space-md); border-radius: var(--radius-md);
-		border: 1px solid var(--color-border);
-	}
-	.price-current { background: var(--color-bg); }
-	.price-new { background: var(--color-primary-50); border-color: var(--color-primary-100); }
-	.price-label {
-		display: block; font-size: .75rem; font-weight: 600;
-		text-transform: uppercase; color: var(--color-text-muted);
-		margin-bottom: var(--space-xs);
-	}
-	.price-row {
-		display: flex; justify-content: space-between;
-		font-size: .88rem; padding: 2px 0;
-	}
-	.price-arrow { font-size: 1.5rem; color: var(--color-text-muted); }
+				<div class="space-y-1 border-l border-teal-200 pl-3">
+					<span class="text-[10px] font-semibold text-teal-600 uppercase">Harga Baru</span>
+					<div class="text-teal-700">PBF: Rp{formatRp(newHargaPbf)}</div>
+					<div class="font-bold text-teal-900">Jual: Rp{formatRp(newHargaJual)}</div>
+				</div>
+			</div>
 
-	.new-margin-info {
-		padding: var(--space-sm) var(--space-md);
-		background: var(--color-info-light); border-radius: var(--radius-md);
-		font-size: .85rem; color: var(--color-info);
-		margin-bottom: var(--space-md);
-	}
-	@media (max-width: 600px) { .pagination { align-items: flex-start; flex-direction: column; } .crud-toolbar { flex-direction: column; align-items: stretch; } }
-</style>
+			<!-- Input Form -->
+			<div class="space-y-3">
+				<div class="space-y-1.5">
+					<label for="new-harga-pbf" class="text-xs font-semibold text-slate-700">Harga PBF (Modal) Baru</label>
+					<Input id="new-harga-pbf" type="number" min="0" bind:value={newHargaPbf} class="h-10 text-sm font-semibold" />
+				</div>
+
+				<div class="space-y-1.5">
+					<label for="new-harga-jual" class="text-xs font-semibold text-slate-700">Harga Jual Baru</label>
+					<Input id="new-harga-jual" type="number" min="0" bind:value={newHargaJual} class="h-10 text-sm font-bold text-teal-700" />
+				</div>
+			</div>
+
+			<!-- New Margin Preview -->
+			{#if newHargaPbf > 0}
+				<div class="p-3 rounded-lg bg-sky-50 border border-sky-200 text-xs text-sky-900 flex items-center justify-between">
+					<span>Estimasi Margin Baru:</span>
+					<span class="font-bold text-sm">
+						{Math.round(((newHargaJual - newHargaPbf) / newHargaPbf) * 100)}%
+						<span class="text-xs font-normal text-sky-700">(+Rp{formatRp(newHargaJual - newHargaPbf)})</span>
+					</span>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	{#snippet footer()}
+		<Button variant="outline" size="sm" onclick={() => (showSheet = false)}>Batal</Button>
+		<Button size="sm" onclick={handleSave} disabled={saving}>
+			{#if saving}Menyimpan...{:else}<Save class="w-3.5 h-3.5 mr-1" /> Simpan Harga{/if}
+		</Button>
+	{/snippet}
+</Sheet>

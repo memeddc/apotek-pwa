@@ -2,34 +2,31 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import type { Ipbf } from '$lib/db/types';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Sheet } from '$lib/components/ui/sheet';
+	import { AlertDialog } from '$lib/components/ui/alert-dialog';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Building2, Plus, Search, Edit2, Trash2, Save, Phone, MapPin } from 'lucide-svelte';
 
 	let data = $state<Ipbf[]>([]);
 	let filtered = $state<Ipbf[]>([]);
 	let searchQuery = $state('');
 	let loading = $state(true);
 
-	// Modal state
-	let showModal = $state(false);
+	// Sheet state
+	let showSheet = $state(false);
 	let isEditing = $state(false);
 	let formData = $state<Ipbf>({ pbf_id: '', pbf_nama: '', no_telp: '', alamat: '' });
 	let saving = $state(false);
 	let idTimer: ReturnType<typeof setTimeout>;
 
-	// Toast
-	let toastMsg = $state('');
-	let toastType = $state<'success' | 'error'>('success');
-	let toastTimer: ReturnType<typeof setTimeout>;
-
 	// Delete confirmation
 	let showDeleteConfirm = $state(false);
 	let deleteTarget = $state<Ipbf | null>(null);
-
-	function showToast(msg: string, type: 'success' | 'error' = 'success') {
-		toastMsg = msg;
-		toastType = type;
-		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toastMsg = ''), 3000);
-	}
 
 	async function loadData() {
 		loading = true;
@@ -38,7 +35,7 @@
 			.select('*')
 			.order('pbf_id');
 		if (error) {
-			showToast('Gagal memuat data: ' + error.message, 'error');
+			toast.error('Gagal memuat data: ' + error.message);
 		} else {
 			data = result ?? [];
 		}
@@ -60,7 +57,7 @@
 	function openAdd() {
 		isEditing = false;
 		formData = { pbf_id: '', pbf_nama: '', no_telp: '', alamat: '' };
-		showModal = true;
+		showSheet = true;
 	}
 
 	function pbfPrefix(name: string): string {
@@ -71,7 +68,7 @@
 		if (isEditing || !formData.pbf_nama.trim()) return;
 		const prefix = pbfPrefix(formData.pbf_nama);
 		const { data: existing, error } = await supabase.from('pbf').select('pbf_id').like('pbf_id', `${prefix}%`).order('pbf_id', { ascending: false }).limit(1);
-		if (error) { showToast('Gagal membuat kode PBF: ' + error.message, 'error'); return; }
+		if (error) { toast.error('Gagal membuat kode PBF: ' + error.message); return; }
 		const lastId = existing?.[0]?.pbf_id ?? '';
 		const lastNumber = Number(lastId.slice(prefix.length)) || 0;
 		formData.pbf_id = `${prefix}${lastNumber + 1}`;
@@ -82,7 +79,7 @@
 	function openEdit(item: Ipbf) {
 		isEditing = true;
 		formData = { ...item };
-		showModal = true;
+		showSheet = true;
 	}
 
 	function confirmDelete(item: Ipbf) {
@@ -92,7 +89,7 @@
 
 	async function handleSave() {
 		if (!formData.pbf_nama.trim()) {
-			showToast('Nama PBF wajib diisi!', 'error');
+			toast.error('Nama PBF wajib diisi!');
 			return;
 		}
 		if (!isEditing) await generatePbfId();
@@ -107,9 +104,9 @@
 				})
 				.eq('pbf_id', formData.pbf_id);
 			if (error) {
-				showToast('Gagal mengupdate: ' + error.message, 'error');
+				toast.error('Gagal mengupdate: ' + error.message);
 			} else {
-				showToast('Data PBF berhasil diupdate');
+				toast.success('Data PBF berhasil diupdate');
 			}
 		} else {
 			const { error } = await supabase.from('pbf').insert([
@@ -121,13 +118,13 @@
 				}
 			]);
 			if (error) {
-				showToast('Gagal menyimpan: ' + error.message, 'error');
+				toast.error('Gagal menyimpan: ' + error.message);
 			} else {
-				showToast('Data PBF berhasil ditambahkan');
+				toast.success('Data PBF berhasil ditambahkan');
 			}
 		}
 		saving = false;
-		showModal = false;
+		showSheet = false;
 		await loadData();
 	}
 
@@ -138,9 +135,9 @@
 			.delete()
 			.eq('pbf_id', deleteTarget.pbf_id);
 		if (error) {
-			showToast('Gagal menghapus: ' + error.message, 'error');
+			toast.error('Gagal menghapus: ' + error.message);
 		} else {
-			showToast('Data PBF berhasil dihapus');
+			toast.success('Data PBF berhasil dihapus');
 		}
 		showDeleteConfirm = false;
 		deleteTarget = null;
@@ -155,120 +152,148 @@
 	onMount(loadData);
 </script>
 
-<div class="page-header">
-	<h1>🏢 Master PBF / Supplier</h1>
-	<p>Kelola data Pedagang Besar Farmasi</p>
-</div>
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<Building2 class="w-6 h-6 text-teal-600" />
+				Master PBF / Supplier
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Kelola data Pedagang Besar Farmasi pemasok obat</p>
+		</div>
 
-<div class="crud-toolbar">
-	<div class="search-box">
-		<span class="search-icon">🔍</span>
-		<input type="text" placeholder="Cari PBF / Supplier..." bind:value={searchQuery} />
+		<Button onclick={openAdd}>
+			<Plus class="w-4 h-4 mr-2" /> Tambah PBF
+		</Button>
 	</div>
-	<button class="btn btn-primary" onclick={openAdd}>+ Tambah PBF</button>
-</div>
 
-<div class="data-table-wrapper">
-	<table class="data-table">
-		<thead>
-			<tr>
-				<th style="width: 100px;">Kode</th>
-				<th>Nama PBF</th>
-				<th style="width: 150px;">No. Telp</th>
-				<th>Alamat</th>
-				<th style="width: 100px;">Aksi</th>
-			</tr>
-		</thead>
-		<tbody>
+	<!-- Toolbar & Search -->
+	<div class="flex items-center justify-between gap-4 max-w-sm">
+		<div class="relative w-full">
+			<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+			<Input
+				type="text"
+				placeholder="Cari PBF / Supplier..."
+				bind:value={searchQuery}
+				class="pl-9"
+			/>
+		</div>
+	</div>
+
+	<!-- Data Table -->
+	<Table>
+		<TableHeader>
+			<TableRow>
+				<TableHead class="w-28">Kode</TableHead>
+				<TableHead>Nama PBF / Supplier</TableHead>
+				<TableHead>No. Telepon</TableHead>
+				<TableHead>Alamat</TableHead>
+				<TableHead class="w-24 text-right">Aksi</TableHead>
+			</TableRow>
+		</TableHeader>
+		<TableBody>
 			{#if loading}
-				<tr>
-					<td colspan="5" class="table-empty">
-						<div>Memuat data...</div>
-					</td>
-				</tr>
+				{#each Array(5) as _}
+					<TableRow>
+						<TableCell><Skeleton class="h-5 w-16" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-40" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-24" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-48" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-16 ml-auto" /></TableCell>
+					</TableRow>
+				{/each}
 			{:else if filtered.length === 0}
-				<tr>
-					<td colspan="5" class="table-empty">
-						<div class="empty-icon">📭</div>
-						<div>Tidak ada data ditemukan</div>
-					</td>
-				</tr>
+				<TableRow>
+					<TableCell colspan={5} class="text-center py-8 text-slate-400 text-xs">
+						Tidak ada PBF ditemukan.
+					</TableCell>
+				</TableRow>
 			{:else}
 				{#each filtered as item}
-					<tr>
-						<td><code style="background: #fef3c7; padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; color: #b45309;">{item.pbf_id}</code></td>
-						<td><strong>{item.pbf_nama}</strong></td>
-						<td style="font-size: 0.88rem;">{item.no_telp || '—'}</td>
-						<td style="color: var(--color-text-secondary); font-size: 0.85rem;">{item.alamat || '—'}</td>
-						<td>
-							<div class="table-actions">
-								<button class="btn btn-ghost btn-sm" title="Edit" onclick={() => openEdit(item)}>✏️</button>
-								<button class="btn btn-danger-ghost btn-sm" title="Hapus" onclick={() => confirmDelete(item)}>🗑️</button>
+					<TableRow>
+						<TableCell>
+							<Badge variant="secondary" class="font-mono text-xs text-amber-700 bg-amber-50">{item.pbf_id}</Badge>
+						</TableCell>
+						<TableCell class="font-semibold text-slate-900 text-xs">{item.pbf_nama}</TableCell>
+						<TableCell class="text-xs text-slate-600">
+							{#if item.no_telp}
+								<span class="flex items-center gap-1">
+									<Phone class="w-3 h-3 text-slate-400" /> {item.no_telp}
+								</span>
+							{:else}
+								—
+							{/if}
+						</TableCell>
+						<TableCell class="text-xs text-slate-500 truncate max-w-xs">
+							{#if item.alamat}
+								<span class="flex items-center gap-1">
+									<MapPin class="w-3 h-3 text-slate-400 shrink-0" /> {item.alamat}
+								</span>
+							{:else}
+								—
+							{/if}
+						</TableCell>
+						<TableCell class="text-right">
+							<div class="flex items-center justify-end gap-1">
+								<Button variant="ghost" size="icon" class="h-8 w-8 text-slate-600 hover:text-teal-600" onclick={() => openEdit(item)}>
+									<Edit2 class="w-3.5 h-3.5" />
+								</Button>
+								<Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-red-600" onclick={() => confirmDelete(item)}>
+									<Trash2 class="w-3.5 h-3.5" />
+								</Button>
 							</div>
-						</td>
-					</tr>
+						</TableCell>
+					</TableRow>
 				{/each}
 			{/if}
-		</tbody>
-	</table>
+		</TableBody>
+	</Table>
 </div>
 
-<!-- Add/Edit Modal -->
-{#if showModal}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={() => (showModal = false)}>
-		<div class="modal-box" onclick={(e) => e.stopPropagation()}>
-			<h2>{isEditing ? 'Edit PBF' : 'Tambah PBF'}</h2>
-			<div class="form-group">
-				<label for="pbf_id">Kode PBF</label>
-				<input id="pbf_id" type="text" value={formData.pbf_id || 'Akan dibuat otomatis'} disabled />
-			</div>
-			<div class="form-group">
-				<label for="pbf_nama">Nama PBF</label>
-				<input id="pbf_nama" type="text" bind:value={formData.pbf_nama} oninput={schedulePbfId} placeholder="Contoh: PT. Kimia Farma" />
-			</div>
-			<div class="form-group">
-				<label for="no_telp">No. Telepon (Opsional)</label>
-				<input id="no_telp" type="text" bind:value={formData.no_telp} placeholder="Contoh: 021-1234567" />
-			</div>
-			<div class="form-group">
-				<label for="alamat">Alamat (Opsional)</label>
-				<textarea id="alamat" bind:value={formData.alamat} placeholder="Alamat lengkap PBF..."></textarea>
-			</div>
-			<div class="modal-footer">
-				<button class="btn btn-ghost" onclick={() => (showModal = false)}>Batal</button>
-				<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
-					{saving ? 'Menyimpan...' : 'Simpan'}
-				</button>
-			</div>
+<!-- Slide-in Sheet Panel Form -->
+<Sheet
+	bind:open={showSheet}
+	title={isEditing ? 'Edit PBF / Supplier' : 'Tambah PBF / Supplier'}
+	description="Kelola informasi kontak dan alamat supplier."
+>
+	<div class="space-y-4 pt-2">
+		<div class="space-y-1.5">
+			<label for="pbf_id" class="text-xs font-semibold text-slate-700">Kode PBF</label>
+			<Input id="pbf_id" type="text" value={formData.pbf_id || 'Akan dibuat otomatis'} disabled class="font-mono bg-slate-50" />
+		</div>
+		<div class="space-y-1.5">
+			<label for="pbf_nama" class="text-xs font-semibold text-slate-700">Nama PBF</label>
+			<Input id="pbf_nama" type="text" bind:value={formData.pbf_nama} oninput={schedulePbfId} placeholder="Contoh: PT. Kimia Farma" />
+		</div>
+		<div class="space-y-1.5">
+			<label for="no_telp" class="text-xs font-semibold text-slate-700">No. Telepon (Opsional)</label>
+			<Input id="no_telp" type="text" bind:value={formData.no_telp} placeholder="Contoh: 021-1234567" />
+		</div>
+		<div class="space-y-1.5">
+			<label for="alamat" class="text-xs font-semibold text-slate-700">Alamat (Opsional)</label>
+			<textarea
+				id="alamat"
+				bind:value={formData.alamat}
+				rows="3"
+				placeholder="Alamat lengkap PBF..."
+				class="w-full p-3 rounded-md border border-slate-200 bg-white text-xs text-slate-800 outline-none focus:ring-1 focus:ring-teal-600 resize-y"
+			></textarea>
 		</div>
 	</div>
-{/if}
 
-<!-- Delete Confirmation Modal -->
-{#if showDeleteConfirm}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={() => (showDeleteConfirm = false)}>
-		<div class="modal-box" onclick={(e) => e.stopPropagation()}>
-			<h2>Konfirmasi Hapus</h2>
-			<p style="color: var(--color-text-secondary); line-height: 1.6;">
-				Apakah Anda yakin ingin menghapus PBF
-				<strong>"{deleteTarget?.pbf_nama}"</strong>?
-				Tindakan ini tidak dapat dibatalkan.
-			</p>
-			<div class="modal-footer">
-				<button class="btn btn-ghost" onclick={() => (showDeleteConfirm = false)}>Batal</button>
-				<button class="btn" style="background: var(--color-danger); color: white;" onclick={handleDelete}>Hapus</button>
-			</div>
-		</div>
-	</div>
-{/if}
+	{#snippet footer()}
+		<Button variant="outline" size="sm" onclick={() => (showSheet = false)}>Batal</Button>
+		<Button size="sm" onclick={handleSave} disabled={saving}>
+			{#if saving}Menyimpan...{:else}<Save class="w-3.5 h-3.5 mr-1" /> Simpan{/if}
+		</Button>
+	{/snippet}
+</Sheet>
 
-<!-- Toast -->
-{#if toastMsg}
-	<div class="toast {toastType === 'success' ? 'toast-success' : 'toast-error'}">
-		{toastMsg}
-	</div>
-{/if}
+<!-- AlertDialog Delete -->
+<AlertDialog
+	bind:open={showDeleteConfirm}
+	title="Hapus PBF / Supplier"
+	description={`Apakah Anda yakin ingin menghapus PBF "${deleteTarget?.pbf_nama}"?`}
+	onConfirm={handleDelete}
+/>

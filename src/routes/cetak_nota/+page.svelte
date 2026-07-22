@@ -1,6 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Select } from '$lib/components/ui/select';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Card, CardHeader, CardTitle, CardContent } from '$lib/components/ui/card';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Receipt, Search, Printer, Calendar, ShoppingCart, Package } from 'lucide-svelte';
 
 	type TransDetail = {
 		obat_id: string;
@@ -31,15 +40,6 @@
 	let obatQuery = $state('');
 	let transTypeFilter = $state<'all' | 'penjualan' | 'pembelian'>('all');
 	let selectedTrans = $state<TransRecord | null>(null);
-	let toastMsg = $state('');
-	let toastType = $state<'success' | 'error'>('success');
-	let toastTimer: ReturnType<typeof setTimeout>;
-
-	function showToast(msg: string, type: 'success' | 'error' = 'success') {
-		toastMsg = msg; toastType = type;
-		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toastMsg = ''), 4000);
-	}
 
 	function formatRp(v: number): string {
 		return new Intl.NumberFormat('id-ID').format(Math.round(v));
@@ -143,7 +143,6 @@
 		const dateFromPrefix = dateFrom.replaceAll('-', '');
 		const dateToNextPrefix = tomorrowOf(dateTo).replaceAll('-', '');
 
-		// 1. Load penjualan
 		const { data: sales, error: salesError } = await supabase
 			.from('penjualan')
 			.select('*')
@@ -152,12 +151,11 @@
 			.order('tanggal_waktu', { ascending: false });
 
 		if (salesError) {
-			showToast(`Gagal memuat data penjualan: ${salesError.message}`, 'error');
+			toast.error(`Gagal memuat data penjualan: ${salesError.message}`);
 			loading = false;
 			return;
 		}
 
-		// 2. Load purchase
 		const { data: purchases, error: purchaseError } = await supabase
 			.from('purchase')
 			.select('*')
@@ -165,12 +163,11 @@
 			.order('trans_id', { ascending: false });
 
 		if (purchaseError) {
-			showToast(`Gagal memuat data pembelian: ${purchaseError.message}`, 'error');
+			toast.error(`Gagal memuat data pembelian: ${purchaseError.message}`);
 			loading = false;
 			return;
 		}
 
-		// Load PBF master data for purchases
 		const { data: pbfList } = await supabase.from('pbf').select('pbf_id, pbf_nama');
 		const pbfMap = new Map<string, string>();
 		(pbfList ?? []).forEach((p) => pbfMap.set(p.pbf_id, p.pbf_nama));
@@ -188,7 +185,6 @@
 			return;
 		}
 
-		// 3. Load details from detail_penjualan and detail_purchase
 		const [{ data: detailsPenjualan }, { data: detailsPurchase }] = await Promise.all([
 			supabase.from('detail_penjualan').select('*').in('trans_id', allTransIds),
 			supabase.from('detail_purchase').select('*').in('trans_id', allTransIds)
@@ -197,7 +193,6 @@
 		const dpList = detailsPenjualan ?? [];
 		const dpurList = detailsPurchase ?? [];
 
-		// Collect all obat_ids for name lookup
 		const obatIds = [...new Set([...dpList.map((d) => d.obat_id), ...dpurList.map((d) => d.obat_id)])];
 		let obatData: any[] = [];
 		if (obatIds.length > 0) {
@@ -207,7 +202,7 @@
 				.in('obat_id', obatIds);
 
 			if (obatError) {
-				showToast(`Gagal memuat detail obat: ${obatError.message}`, 'error');
+				toast.error(`Gagal memuat detail obat: ${obatError.message}`);
 			} else {
 				obatData = oData ?? [];
 			}
@@ -221,7 +216,6 @@
 			});
 		});
 
-		// Build sales transactions
 		const mappedSales: TransRecord[] = salesList.map((s) => {
 			const rawItemsPenjualan = dpList.filter((d) => d.trans_id === s.trans_id);
 			const rawItemsPurchase = dpurList.filter((d) => d.trans_id === s.trans_id);
@@ -261,7 +255,6 @@
 			};
 		});
 
-		// Build purchase transactions
 		const mappedPurchases: TransRecord[] = purchasesList.map((p) => {
 			const rawItemsPurchase = dpurList.filter((d) => d.trans_id === p.trans_id);
 			const rawItemsPenjualan = dpList.filter((d) => d.trans_id === p.trans_id);
@@ -302,7 +295,6 @@
 			};
 		});
 
-		// Combine and sort by date descending
 		const allRecords = [...mappedSales, ...mappedPurchases];
 		allRecords.sort((a, b) => new Date(b.tanggal_waktu).getTime() - new Date(a.tanggal_waktu).getTime());
 
@@ -340,279 +332,223 @@
 	});
 </script>
 
-<div class="page-header no-print">
-	<h1>🧾 Cetak Nota</h1>
-	<p>Lihat dan cetak ulang nota penjualan & faktur pembelian dari detail transaction (`detail_purchase` / `detail_penjualan`)</p>
-</div>
-
-<!-- Filter Section -->
-<section class="nota-card no-print">
-	<div class="filter-grid">
-		<div class="form-group">
-			<label for="date-from">Dari Tanggal</label>
-			<input id="date-from" type="date" bind:value={dateFrom} />
-		</div>
-		<div class="form-group">
-			<label for="date-to">Sampai Tanggal</label>
-			<input id="date-to" type="date" bind:value={dateTo} />
-		</div>
-		<div class="form-group">
-			<label for="trans-type">Tipe Transaksi</label>
-			<select id="trans-type" bind:value={transTypeFilter}>
-				<option value="all">Semua Transaksi</option>
-				<option value="penjualan">🛒 Penjualan</option>
-				<option value="pembelian">📦 Pembelian (Faktur)</option>
-			</select>
-		</div>
-		<div class="form-group">
-			<label for="obat-filter">Cari Obat / No. Nota / PBF</label>
-			<input id="obat-filter" type="text" bind:value={obatQuery} placeholder="Nama, kode obat, nota, atau supplier..." />
-		</div>
-		<div class="form-group filter-btn-group">
-			<span class="label-spacer" aria-hidden="true">&nbsp;</span>
-			<button class="btn btn-primary" onclick={loadTransactions} disabled={loading}>
-				{loading ? 'Memuat...' : '🔍 Cari'}
-			</button>
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<Receipt class="w-6 h-6 text-teal-600" />
+				Cetak Nota & Riwayat Transaksi
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Cari dan cetak ulang nota penjualan atau pembelian faktur PBF</p>
 		</div>
 	</div>
-</section>
 
-<!-- Results -->
-<section class="nota-card no-print">
-	<h2>Riwayat Transaksi ({getFilteredTransactions().length} transaksi)</h2>
+	<!-- Filter Card -->
+	<Card class="border-slate-200 shadow-sm print:hidden">
+		<CardContent class="pt-6">
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+				<!-- Date From -->
+				<div class="lg:col-span-3 space-y-1">
+					<label for="date-from" class="text-xs font-semibold text-slate-600">Dari Tanggal</label>
+					<Input id="date-from" type="date" bind:value={dateFrom} class="text-xs" />
+				</div>
 
-	{#if loading}
-		<div class="table-empty">Memuat data transaksi...</div>
-	{:else if getFilteredTransactions().length === 0}
-		<div class="table-empty">
-			<div class="empty-icon">📭</div>
-			<div>Tidak ada transaksi ditemukan untuk filter ini</div>
-		</div>
-	{:else}
-		<div class="trans-list">
-			{#each getFilteredTransactions() as trans}
-				<div class="trans-item">
-					<div class="trans-header">
-						<div class="trans-info">
-							<div class="trans-title-row">
-								<code class="nota-code">{trans.trans_id}</code>
-								{#if trans.type === 'penjualan'}
-									<span class="type-badge badge-sale">🛒 Penjualan</span>
-								{:else}
-									<span class="type-badge badge-purchase">📦 Pembelian (PBF: {trans.pbf_nama ?? '-'})</span>
-								{/if}
-							</div>
-							<span class="trans-date">{formatTanggal(trans.tanggal_waktu)} {formatWaktu(trans.tanggal_waktu)}</span>
+				<!-- Date To -->
+				<div class="lg:col-span-3 space-y-1">
+					<label for="date-to" class="text-xs font-semibold text-slate-600">Sampai Tanggal</label>
+					<Input id="date-to" type="date" bind:value={dateTo} class="text-xs" />
+				</div>
+
+				<!-- Type Filter -->
+				<div class="lg:col-span-2 space-y-1">
+					<label for="trans-type" class="text-xs font-semibold text-slate-600">Tipe</label>
+					<Select
+						id="trans-type"
+						bind:value={transTypeFilter}
+						placeholder="Pilih tipe..."
+						options={[
+							{ value: 'all', label: 'Semua' },
+							{ value: 'penjualan', label: 'Penjualan' },
+							{ value: 'pembelian', label: 'Pembelian (Faktur)' }
+						]}
+					/>
+				</div>
+
+				<!-- Search Input -->
+				<div class="lg:col-span-4 space-y-1 relative">
+					<label for="obat-filter" class="text-xs font-semibold text-slate-600">Cari Obat / Nota / PBF</label>
+					<div class="flex gap-2">
+						<div class="relative flex-1">
+							<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+							<Input
+								id="obat-filter"
+								type="text"
+								bind:value={obatQuery}
+								placeholder="Ketik pencarian..."
+								class="pl-9 text-xs"
+							/>
 						</div>
-						<div class="trans-summary">
-							<span class="trans-items-count">{trans.details.length} item</span>
-							<span class="trans-total">Rp{formatRp(trans.total_trans)}</span>
-							<button class="btn btn-primary btn-sm" onclick={() => openPrint(trans)}>🖨️ Cetak Nota</button>
-						</div>
-					</div>
-					<div class="trans-details">
-						<table class="mini-table">
-							<thead>
-								<tr>
-									<th>Obat</th>
-									<th>Jenis</th>
-									<th class="td-center">Qty</th>
-									<th class="td-right">Harga Satuan</th>
-									{#if trans.details.some(d => d.disc > 0)}
-										<th class="td-right">Diskon</th>
-									{/if}
-									<th class="td-right">Total</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each trans.details as d}
-									<tr>
-										<td><strong>{d.obat_nama}</strong> <span class="obat-code">({d.obat_id})</span></td>
-										<td><span class="jenis-tag">{d.jenis_nama}</span></td>
-										<td class="td-center">{d.qty}</td>
-										<td class="td-right">Rp{formatRp(d.harga_obat)}</td>
-										{#if trans.details.some(item => item.disc > 0)}
-											<td class="td-right">{d.disc > 0 ? `${d.disc}%` : '-'}</td>
-										{/if}
-										<td class="td-right"><strong>Rp{formatRp(d.total_line)}</strong></td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-						<div class="trans-footer-info">
-							<span>Subtotal: Rp{formatRp(subtotalBeforeDisc(trans))}</span>
-							<span>Diskon Total: Rp{formatRp(trans.total_disc)}</span>
-							<span>Net Total: Rp{formatRp(trans.total_trans)}</span>
-							{#if trans.type === 'penjualan'}
-								<span>Bayar: Rp{formatRp(trans.bayar)}</span>
-								<span>Kembali: Rp{formatRp(trans.kembali)}</span>
-							{/if}
-						</div>
+						<Button size="sm" onclick={loadTransactions} disabled={loading}>
+							{loading ? '...' : 'Cari'}
+						</Button>
 					</div>
 				</div>
-			{/each}
-		</div>
-	{/if}
-</section>
+			</div>
+		</CardContent>
+	</Card>
 
-<!-- Print View (only visible during print) -->
+	<!-- Results List -->
+	<div class="space-y-4 print:hidden">
+		<h3 class="text-sm font-semibold text-slate-700">
+			Daftar Transaksi Ditemukan ({getFilteredTransactions().length})
+		</h3>
+
+		{#if loading}
+			<div class="space-y-3">
+				{#each Array(3) as _}
+					<Skeleton class="h-24 w-full rounded-xl" />
+				{/each}
+			</div>
+		{:else if getFilteredTransactions().length === 0}
+			<Card class="border-slate-200">
+				<CardContent class="py-12 text-center text-xs text-slate-400">
+					Tidak ada transaksi ditemukan untuk filter ini.
+				</CardContent>
+			</Card>
+		{:else}
+			<div class="space-y-4">
+				{#each getFilteredTransactions() as trans}
+					<Card class="border-slate-200 shadow-xs hover:border-teal-400 transition-colors">
+						<CardHeader class="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+							<div class="flex items-center gap-3">
+								<Badge variant="secondary" class="font-mono text-xs font-bold text-slate-800">{trans.trans_id}</Badge>
+
+								{#if trans.type === 'penjualan'}
+									<Badge variant="success" class="text-[10px] inline-flex items-center gap-1">
+										<ShoppingCart class="w-3 h-3" /> Penjualan
+									</Badge>
+								{:else}
+									<Badge variant="secondary" class="text-[10px] text-purple-700 bg-purple-50 inline-flex items-center gap-1">
+										<Package class="w-3 h-3" /> Pembelian ({trans.pbf_nama ?? 'PBF'})
+									</Badge>
+								{/if}
+
+								<span class="text-xs text-slate-400">
+									{formatTanggal(trans.tanggal_waktu)} {formatWaktu(trans.tanggal_waktu)}
+								</span>
+							</div>
+
+							<div class="flex items-center gap-3">
+								<span class="text-sm font-bold text-teal-700">Rp{formatRp(trans.total_trans)}</span>
+								<Button size="sm" variant="outline" class="h-8 text-xs" onclick={() => openPrint(trans)}>
+									<Printer class="w-3.5 h-3.5 mr-1" /> Cetak Nota
+								</Button>
+							</div>
+						</CardHeader>
+
+						<CardContent class="pt-3">
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead>Nama Obat</TableHead>
+										<TableHead>Jenis</TableHead>
+										<TableHead class="text-center">Qty</TableHead>
+										<TableHead class="text-right">Harga Satuan</TableHead>
+										<TableHead class="text-right">Total Line</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{#each trans.details as d}
+										<TableRow>
+											<TableCell class="font-semibold text-slate-900 text-xs">
+												{d.obat_nama}
+												<span class="block text-[10px] text-slate-400 font-mono font-normal">{d.obat_id}</span>
+											</TableCell>
+											<TableCell><Badge variant="outline" class="text-[10px]">{d.jenis_nama}</Badge></TableCell>
+											<TableCell class="text-center text-xs font-bold">{d.qty}</TableCell>
+											<TableCell class="text-right text-xs">Rp{formatRp(d.harga_obat)}</TableCell>
+											<TableCell class="text-right font-bold text-xs text-teal-700">Rp{formatRp(d.total_line)}</TableCell>
+										</TableRow>
+									{/each}
+								</TableBody>
+							</Table>
+						</CardContent>
+					</Card>
+				{/each}
+			</div>
+		{/if}
+	</div>
+</div>
+
+<!-- Print View Layout for Nota Receipt -->
 {#if selectedTrans}
-	<div class="print-only print-nota">
-		<div class="print-header">
-			<h2>APOTEK PWA</h2>
-			<p>{selectedTrans.type === 'penjualan' ? 'Nota Penjualan' : 'Nota / Bukti Pembelian'}</p>
+	<div id="printable-receipt" class="hidden print:block">
+		<div style="text-align: center; margin-bottom: 8px;">
+			<h3 style="font-size: 14px; font-weight: bold; margin: 0;">APOTEK PWA</h3>
+			<p style="font-size: 10px; margin: 2px 0;">
+				{selectedTrans.type === 'penjualan' ? 'NOTA PENJUALAN' : 'BUKTI PEMBELIAN PBF'}
+			</p>
+			<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
 		</div>
-		<div class="print-info">
-			<div><strong>No. Nota:</strong> {selectedTrans.trans_id}</div>
-			<div><strong>Tanggal:</strong> {formatTanggal(selectedTrans.tanggal_waktu)} {formatWaktu(selectedTrans.tanggal_waktu)}</div>
+
+		<div style="font-size: 10px; margin-bottom: 6px;">
+			<div>No. Nota : {selectedTrans.trans_id}</div>
+			<div>Tgl      : {formatTanggal(selectedTrans.tanggal_waktu)} {formatWaktu(selectedTrans.tanggal_waktu)}</div>
 			{#if selectedTrans.type === 'pembelian' && selectedTrans.pbf_nama}
-				<div><strong>Supplier (PBF):</strong> {selectedTrans.pbf_nama}</div>
+				<div>Supplier : {selectedTrans.pbf_nama}</div>
 			{/if}
 		</div>
-		<table class="print-table">
-			<thead>
-				<tr>
-					<th>No</th>
-					<th>Nama Obat</th>
-					<th>Jenis</th>
-					<th class="td-center">Qty</th>
-					<th class="td-right">Harga</th>
-					<th class="td-right">Total</th>
-				</tr>
-			</thead>
+
+		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+
+		<table style="width: 100%; font-size: 10px; text-align: left; border-collapse: collapse;">
 			<tbody>
-				{#each selectedTrans.details as d, i}
+				{#each selectedTrans.details as d}
 					<tr>
-						<td>{i + 1}</td>
-						<td>{d.obat_nama}</td>
-						<td>{d.jenis_nama}</td>
-						<td class="td-center">{d.qty}</td>
-						<td class="td-right">Rp{formatRp(d.harga_obat)}</td>
-						<td class="td-right">Rp{formatRp(d.total_line)}</td>
+						<td colspan="3" style="font-weight: bold; padding-top: 2px;">{d.obat_nama}</td>
+					</tr>
+					<tr>
+						<td style="width: 30%;">{d.qty} x Rp{formatRp(d.harga_obat)}</td>
+						<td style="text-align: right;" colspan="2">Rp{formatRp(d.total_line)}</td>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
-		<div class="print-totals">
-			<div class="print-row"><span>Subtotal</span><span>Rp{formatRp(subtotalBeforeDisc(selectedTrans))}</span></div>
+
+		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+
+		<div style="font-size: 10px; line-height: 1.4;">
+			<div style="display: flex; justify-content: space-between;">
+				<span>Subtotal:</span>
+				<span>Rp{formatRp(subtotalBeforeDisc(selectedTrans))}</span>
+			</div>
 			{#if selectedTrans.total_disc > 0}
-				<div class="print-row"><span>Diskon</span><span>-Rp{formatRp(selectedTrans.total_disc)}</span></div>
+				<div style="display: flex; justify-content: space-between;">
+					<span>Diskon:</span>
+					<span>-Rp{formatRp(selectedTrans.total_disc)}</span>
+				</div>
 			{/if}
-			<div class="print-row print-grand"><span>Total</span><span>Rp{formatRp(selectedTrans.total_trans)}</span></div>
+			<div style="display: flex; justify-content: space-between; font-weight: bold;">
+				<span>TOTAL:</span>
+				<span>Rp{formatRp(selectedTrans.total_trans)}</span>
+			</div>
 			{#if selectedTrans.type === 'penjualan'}
-				<div class="print-row"><span>Bayar</span><span>Rp{formatRp(selectedTrans.bayar)}</span></div>
-				<div class="print-row"><span>Kembali</span><span>Rp{formatRp(selectedTrans.kembali)}</span></div>
+				<div style="display: flex; justify-content: space-between;">
+					<span>Bayar:</span>
+					<span>Rp{formatRp(selectedTrans.bayar)}</span>
+				</div>
+				<div style="display: flex; justify-content: space-between;">
+					<span>Kembali:</span>
+					<span>Rp{formatRp(selectedTrans.kembali)}</span>
+				</div>
 			{/if}
 		</div>
-		<div class="print-footer">
-			<p>Terima kasih atas kunjungan Anda</p>
+
+		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+
+		<div style="text-align: center; font-size: 9px; margin-top: 8px;">
+			<p>Terima Kasih Semoga Lekas Sembuh</p>
 		</div>
 	</div>
 {/if}
-
-{#if toastMsg}<div class="toast no-print {toastType === 'success' ? 'toast-success' : 'toast-error'}">{toastMsg}</div>{/if}
-
-<style>
-	.nota-card {
-		background: var(--color-surface); border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-lg);
-	}
-	.nota-card h2 { font-size: 1.05rem; margin-bottom: var(--space-md); }
-	.filter-grid {
-		display: grid; grid-template-columns: 1fr 1fr 1.2fr 2fr auto; gap: var(--space-md); align-items: start;
-	}
-	.filter-btn-group { display: flex; flex-direction: column; justify-content: flex-end; }
-
-	/* Transaction list */
-	.trans-list { display: flex; flex-direction: column; gap: var(--space-md); }
-	.trans-item {
-		border: 1px solid var(--color-border); border-radius: var(--radius-md);
-		overflow: hidden; transition: box-shadow var(--transition-fast);
-	}
-	.trans-item:hover { box-shadow: var(--shadow-md); }
-	.trans-header {
-		display: flex; justify-content: space-between; align-items: center;
-		padding: var(--space-md); background: var(--color-bg);
-	}
-	.trans-info { display: flex; flex-direction: column; gap: 4px; }
-	.trans-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-	.nota-code {
-		background: #dbeafe; padding: 2px 8px; border-radius: 4px;
-		color: #1e40af; font-size: .85rem; font-weight: 600;
-	}
-	.type-badge {
-		font-size: .75rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;
-	}
-	.badge-sale { background: #dcfce7; color: #166534; }
-	.badge-purchase { background: #f3e8ff; color: #6b21a8; }
-
-	.trans-date { font-size: .82rem; color: var(--color-text-muted); }
-	.trans-summary { display: flex; align-items: center; gap: var(--space-md); }
-	.trans-items-count {
-		background: var(--color-primary-50); color: var(--color-primary-dark);
-		padding: 2px 8px; border-radius: 12px; font-size: .78rem; font-weight: 500;
-	}
-	.trans-total { font-size: 1.1rem; font-weight: 700; color: var(--color-primary-dark); }
-	.trans-details { padding: var(--space-md); }
-	.trans-footer-info {
-		display: flex; gap: var(--space-lg); margin-top: var(--space-sm);
-		font-size: .85rem; color: var(--color-text-secondary); flex-wrap: wrap;
-	}
-
-	.obat-code { font-size: .75rem; color: var(--color-text-muted); font-weight: normal; }
-
-	/* Mini table */
-	.mini-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-	.mini-table th {
-		text-align: left; padding: var(--space-xs) var(--space-sm);
-		font-weight: 600; font-size: .78rem; color: var(--color-text-secondary);
-		text-transform: uppercase; border-bottom: 1px solid var(--color-border);
-	}
-	.mini-table td {
-		padding: var(--space-xs) var(--space-sm);
-		border-bottom: 1px solid var(--color-border-light);
-	}
-	.jenis-tag {
-		background: var(--color-primary-50); color: var(--color-primary-dark);
-		padding: 1px 6px; border-radius: 8px; font-size: .75rem;
-	}
-	.td-center { text-align: center; }
-	.td-right { text-align: right; font-variant-numeric: tabular-nums; }
-	.table-empty { text-align: center; padding: var(--space-2xl); color: var(--color-text-muted); }
-	.empty-icon { font-size: 2rem; margin-bottom: var(--space-sm); }
-
-	/* Print styles */
-	.print-only { display: none; }
-
-	@media print {
-		.no-print { display: none !important; }
-		.print-only { display: block !important; }
-
-		.print-nota {
-			font-family: 'Courier New', monospace; font-size: 12px;
-			max-width: 80mm; margin: 0 auto; padding: 8px;
-		}
-		.print-header { text-align: center; margin-bottom: 12px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
-		.print-header h2 { font-size: 16px; margin-bottom: 4px; }
-		.print-header p { font-size: 12px; }
-		.print-info { margin-bottom: 12px; font-size: 11px; }
-		.print-info div { margin-bottom: 2px; }
-		.print-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
-		.print-table th { text-align: left; border-bottom: 1px solid #000; padding: 2px 4px; font-size: 10px; }
-		.print-table td { padding: 2px 4px; border-bottom: 1px dotted #ccc; }
-		.print-totals { border-top: 1px dashed #000; padding-top: 8px; }
-		.print-row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; }
-		.print-grand { font-weight: bold; font-size: 13px; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 4px 0; margin: 4px 0; }
-		.print-footer { text-align: center; margin-top: 12px; border-top: 1px dashed #000; padding-top: 8px; font-size: 11px; }
-	}
-
-	@media (max-width: 768px) {
-		.filter-grid { grid-template-columns: 1fr 1fr; }
-		.trans-header { flex-direction: column; align-items: flex-start; gap: var(--space-sm); }
-		.trans-summary { flex-wrap: wrap; }
-	}
-	@media (max-width: 480px) {
-		.filter-grid { grid-template-columns: 1fr; }
-		.trans-footer-info { flex-direction: column; gap: var(--space-xs); }
-	}
-</style>

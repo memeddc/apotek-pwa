@@ -2,6 +2,13 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import type { Iobat, Istok } from '$lib/db/types';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Package, Search, RotateCcw, Calendar, AlertTriangle } from 'lucide-svelte';
 
 	type StokRow = Istok & { obat_nama: string; jenis_id: string };
 
@@ -44,7 +51,10 @@
 				const obatMap = await loadMedicineMap(stok.map((item) => item.obat_id));
 				rows = stok.map((item) => ({ ...item, obat_nama: obatMap.get(item.obat_id)?.obat_nama ?? item.obat_id, jenis_id: obatMap.get(item.obat_id)?.jenis_id ?? '-' }));
 			}
-		} catch (error) { errorMessage = error instanceof Error ? error.message : 'Gagal memuat stok.'; }
+		} catch (error) {
+			errorMessage = error instanceof Error ? error.message : 'Gagal memuat stok.';
+			toast.error(errorMessage);
+		}
 		loading = false;
 	}
 
@@ -56,13 +66,108 @@
 	onMount(loadStok);
 </script>
 
-<div class="page-header"><h1>Stok</h1><p>Stok obat yang tersedia saat ini.</p></div>
-<div class="crud-toolbar"><div class="search-box"><span class="search-icon">⌕</span><input type="search" bind:value={searchQuery} oninput={handleSearch} placeholder="Cari nama atau kode obat..." /></div><button class="btn btn-ghost" type="button" onclick={loadStok} disabled={loading}>Muat ulang</button></div>
-<p class="result-note">{searchQuery.trim().length >= 2 ? 'Hasil pencarian' : 'Menampilkan 100 stok pertama. Ketik minimal 2 huruf untuk mencari.'}</p>
-{#if errorMessage}<div class="stock-error">Gagal memuat stok: {errorMessage}</div>{/if}
-<div class="data-table-wrapper"><table class="data-table stock-table"><thead><tr><th>Obat</th><th>Jenis</th><th>Stok</th><th>Kedaluwarsa</th><th>Harga PBF</th><th>Harga Jual</th><th>Diberikan</th></tr></thead><tbody>
-{#if loading}<tr><td colspan="7" class="table-empty">Memuat stok...</td></tr>{:else if rows.length === 0}<tr><td colspan="7" class="table-empty">Tidak ada stok yang ditemukan.</td></tr>{:else}{#each rows as row}<tr><td><strong>{row.obat_nama}</strong><br /><small>{row.obat_id}</small></td><td>{row.jenis_id}</td><td class:stock-negative={row.qty < 0} class:stock-positive={row.qty > 0}><strong>{rupiah(row.qty)}</strong></td><td>{formatTanggal(row.expired_date)}</td><td>Rp {rupiah(row.harga_pbf)}</td><td>Rp {rupiah(row.harga_jual)}</td><td><span class:badge-yes={row.diberikan === 1} class:badge-no={row.diberikan === 0}>{row.diberikan === 1 ? 'Diberikan' : 'Tidak'}</span></td></tr>{/each}{/if}
-</tbody></table></div>
-<style>
-.stock-table { min-width: 880px; }.stock-positive { color: var(--color-success); }.stock-negative { color: var(--color-danger); }.badge-yes, .badge-no { border-radius: 999px; font-size: .78rem; font-weight: 600; padding: .2rem .55rem; }.badge-yes { background: var(--color-success-light); color: var(--color-success); }.badge-no { background: var(--color-surface-hover); color: var(--color-text-secondary); }.stock-error { margin-bottom: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--color-danger-light); color: var(--color-danger); }.result-note { margin: calc(var(--space-md) * -1) 0 var(--space-md); color: var(--color-text-muted); font-size: .82rem; }
-</style>
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<Package class="w-6 h-6 text-teal-600" />
+				Stok Obat
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Status ketersediaan persediaan obat saat ini</p>
+		</div>
+
+		<Button variant="outline" size="sm" onclick={loadStok} disabled={loading}>
+			<RotateCcw class="w-3.5 h-3.5 mr-1.5" /> Muat Ulang
+		</Button>
+	</div>
+
+	<!-- Toolbar & Search -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div class="relative w-full max-w-sm">
+			<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+			<Input
+				type="search"
+				bind:value={searchQuery}
+				oninput={handleSearch}
+				placeholder="Cari nama atau kode obat..."
+				class="pl-9"
+			/>
+		</div>
+
+		<div class="text-xs text-slate-400">
+			{searchQuery.trim().length >= 2 ? 'Hasil pencarian obat' : 'Menampilkan 100 stok terbanyak'}
+		</div>
+	</div>
+
+	<!-- Data Table -->
+	<Table>
+		<TableHeader>
+			<TableRow>
+				<TableHead>Nama Obat</TableHead>
+				<TableHead>Jenis</TableHead>
+				<TableHead class="text-center">Jumlah Stok</TableHead>
+				<TableHead>Tgl. Kedaluwarsa</TableHead>
+				<TableHead class="text-right">Harga PBF</TableHead>
+				<TableHead class="text-right">Harga Jual</TableHead>
+				<TableHead class="text-center">Status Disc</TableHead>
+			</TableRow>
+		</TableHeader>
+		<TableBody>
+			{#if loading}
+				{#each Array(6) as _}
+					<TableRow>
+						<TableCell><Skeleton class="h-5 w-40" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-12 mx-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-24" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-16 mx-auto" /></TableCell>
+					</TableRow>
+				{/each}
+			{:else if rows.length === 0}
+				<TableRow>
+					<TableCell colspan={7} class="text-center py-8 text-slate-400 text-xs">
+						Tidak ada stok obat yang ditemukan.
+					</TableCell>
+				</TableRow>
+			{:else}
+				{#each rows as row}
+					<TableRow>
+						<TableCell class="font-semibold text-slate-900 text-xs">
+							{row.obat_nama}
+							<span class="block text-[10px] font-mono text-purple-700">{row.obat_id}</span>
+						</TableCell>
+						<TableCell class="text-xs text-slate-600">
+							<Badge variant="outline" class="text-[11px] font-normal">{row.jenis_id}</Badge>
+						</TableCell>
+						<TableCell class="text-center font-bold text-xs">
+							{#if row.qty <= 0}
+								<span class="text-red-600 font-extrabold flex items-center justify-center gap-1">
+									<AlertTriangle class="w-3 h-3 shrink-0" /> {rupiah(row.qty)}
+								</span>
+							{:else}
+								<span class="text-emerald-700">{rupiah(row.qty)}</span>
+							{/if}
+						</TableCell>
+						<TableCell class="text-xs text-slate-600">
+							<span class="flex items-center gap-1">
+								<Calendar class="w-3 h-3 text-slate-400 shrink-0" /> {formatTanggal(row.expired_date)}
+							</span>
+						</TableCell>
+						<TableCell class="text-right text-xs text-slate-600">Rp {rupiah(row.harga_pbf)}</TableCell>
+						<TableCell class="text-right text-xs font-bold text-teal-700">Rp {rupiah(row.harga_jual)}</TableCell>
+						<TableCell class="text-center">
+							{#if row.diberikan === 1}
+								<Badge variant="success" class="text-[10px]">Diberikan</Badge>
+							{:else}
+								<Badge variant="secondary" class="text-[10px]">Tidak</Badge>
+							{/if}
+						</TableCell>
+					</TableRow>
+				{/each}
+			{/if}
+		</TableBody>
+	</Table>
+</div>

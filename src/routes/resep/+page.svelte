@@ -2,6 +2,15 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import type { Iresep, Idetail_resep, Idetail_racikan, IResepItemInput, IResepRacikanInput, Iobat } from '$lib/db/types';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Select } from '$lib/components/ui/select';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Sheet } from '$lib/components/ui/sheet';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { ClipboardList, Plus, Search, Eye, RotateCcw, Save, Trash2, Pill, FlaskConical, User, UserCheck } from 'lucide-svelte';
 
 	type ResepWithDetail = Iresep & {
 		detailCount?: number;
@@ -12,24 +21,21 @@
 	type DetailRacikanView = Idetail_racikan & { obat_nama?: string };
 
 	let loading = $state(true);
-	let toastMsg = $state('');
-	let toastType = $state<'success' | 'error'>('success');
-	let toastTimer: ReturnType<typeof setTimeout>;
 
 	// List & Filter states
 	let resepList = $state<ResepWithDetail[]>([]);
 	let searchQuery = $state('');
 	let dateFilter = $state<'all' | 'today' | '7days'>('all');
 
-	// Detail Modal states
+	// Detail Sheet states
 	let selectedResep = $state<Iresep | null>(null);
 	let viewDetails = $state<DetailResepView[]>([]);
 	let viewRacikan = $state<DetailRacikanView[]>([]);
 	let loadingDetail = $state(false);
-	let showDetailModal = $state(false);
+	let showDetailSheet = $state(false);
 
-	// Create Modal states
-	let showAddModal = $state(false);
+	// Create Sheet states
+	let showAddSheet = $state(false);
 	let saving = $state(false);
 
 	// Form inputs
@@ -55,13 +61,6 @@
 	let selectedRacikanObat = $state<Iobat | null>(null);
 	let inputQtyRacikan = $state(1);
 	let racikanLines = $state<IResepRacikanInput[]>([]);
-
-	function showToast(msg: string, type: 'success' | 'error' = 'success') {
-		toastMsg = msg;
-		toastType = type;
-		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toastMsg = ''), 4000);
-	}
 
 	function formatRp(val: number): string {
 		return new Intl.NumberFormat('id-ID').format(Math.round(val));
@@ -105,27 +104,26 @@
 
 			const { data, error } = await query.limit(50);
 			if (error) {
-				showToast(`Gagal memuat resep: ${error.message}`, 'error');
+				toast.error(`Gagal memuat resep: ${error.message}`);
 				resepList = [];
 			} else {
 				resepList = data ?? [];
 			}
 		} catch (e: any) {
-			showToast(`Terjadi kesalahan: ${e?.message || e}`, 'error');
+			toast.error(`Terjadi kesalahan: ${e?.message || e}`);
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function openDetailModal(resep: Iresep) {
+	async function openDetailSheet(resep: Iresep) {
 		selectedResep = resep;
-		showDetailModal = true;
+		showDetailSheet = true;
 		loadingDetail = true;
 		viewDetails = [];
 		viewRacikan = [];
 
 		try {
-			// Fetch detail_resep
 			const { data: dData, error: dErr } = await supabase
 				.from('detail_resep')
 				.select('*')
@@ -133,7 +131,6 @@
 
 			if (dErr) console.error('Error fetching detail_resep:', dErr);
 
-			// Fetch detail_racikan
 			const { data: rData, error: rErr } = await supabase
 				.from('detail_racikan')
 				.select('*')
@@ -141,7 +138,6 @@
 
 			if (rErr) console.error('Error fetching detail_racikan:', rErr);
 
-			// Get all obat IDs needed
 			const obatIds = Array.from(new Set([
 				...(dData ?? []).map(i => i.obat_id),
 				...(rData ?? []).map(i => i.obat_id)
@@ -170,7 +166,7 @@
 			}));
 
 		} catch (e: any) {
-			showToast(`Gagal memuat detail resep: ${e?.message || e}`, 'error');
+			toast.error(`Gagal memuat detail resep: ${e?.message || e}`);
 		} finally {
 			loadingDetail = false;
 		}
@@ -215,12 +211,11 @@
 		generateResepId();
 	}
 
-	function openAddModal() {
+	function openAddSheet() {
 		resetForm();
-		showAddModal = true;
+		showAddSheet = true;
 	}
 
-	// Search Obat for Non-Racikan
 	async function searchObatForDetail(term: string) {
 		const q = term.trim();
 		if (!q) {
@@ -247,7 +242,6 @@
 		obatSearchQuery = `${obat.obat_nama} (${obat.obat_id})`;
 		obatSearchResults = [];
 
-		// Fetch harga_jual from stok if available
 		try {
 			const { data: stokData } = await supabase
 				.from('stok')
@@ -276,11 +270,11 @@
 
 	function addItemLine() {
 		if (!selectedObatItem) {
-			showToast('Pilih obat terlebih dahulu!', 'error');
+			toast.error('Pilih obat terlebih dahulu!');
 			return;
 		}
 		if (inputQtyResep <= 0 || inputQtyAsli <= 0) {
-			showToast('Qty resep dan qty asli harus lebih besar dari 0!', 'error');
+			toast.error('Qty resep dan qty asli harus lebih besar dari 0!');
 			return;
 		}
 
@@ -310,7 +304,6 @@
 		itemLines = itemLines.filter((_, i) => i !== index);
 	}
 
-	// Search Obat for Racikan
 	async function searchObatForRacikan(term: string) {
 		const q = term.trim();
 		if (!q) {
@@ -347,11 +340,11 @@
 
 	function addRacikanLine() {
 		if (!selectedRacikanObat) {
-			showToast('Pilih obat racikan terlebih dahulu!', 'error');
+			toast.error('Pilih obat racikan terlebih dahulu!');
 			return;
 		}
 		if (inputQtyRacikan <= 0) {
-			showToast('Qty racikan harus lebih besar dari 0!', 'error');
+			toast.error('Qty racikan harus lebih besar dari 0!');
 			return;
 		}
 
@@ -384,25 +377,24 @@
 		const tanggalResep = inputTanggalResep;
 
 		if (!resepId) {
-			showToast('Nomor Resep tidak boleh kosong!', 'error');
+			toast.error('Nomor Resep tidak boleh kosong!');
 			return;
 		}
 		if (!pasienNama) {
-			showToast('Nama Pasien wajib diisi!', 'error');
+			toast.error('Nama Pasien wajib diisi!');
 			return;
 		}
 		if (!dokterNama) {
-			showToast('Nama Dokter wajib diisi!', 'error');
+			toast.error('Nama Dokter wajib diisi!');
 			return;
 		}
 		if (itemLines.length === 0 && racikanLines.length === 0) {
-			showToast('Tambahkan minimal 1 item obat (non-racikan atau racikan) ke dalam resep!', 'error');
+			toast.error('Tambahkan minimal 1 item obat ke dalam resep!');
 			return;
 		}
 
 		saving = true;
 		try {
-			// Check resep_id duplicate
 			const { data: existing } = await supabase
 				.from('resep')
 				.select('resep_id')
@@ -410,12 +402,11 @@
 				.maybeSingle();
 
 			if (existing) {
-				showToast(`Nomor Resep '${resepId}' sudah terdaftar. Silakan gunakan Nomor Resep lain!`, 'error');
+				toast.error(`Nomor Resep '${resepId}' sudah terdaftar. Gunaan Nomor Resep lain!`);
 				saving = false;
 				return;
 			}
 
-			// 1. Insert header resep
 			const { error: resepErr } = await supabase.from('resep').insert({
 				resep_id: resepId,
 				pasien_nama: pasienNama,
@@ -430,7 +421,6 @@
 				throw new Error(`Gagal menyimpan header resep: ${resepErr.message}`);
 			}
 
-			// 2. Insert detail_resep if any
 			if (itemLines.length > 0) {
 				const detailRows = itemLines.map(item => ({
 					resep_id: resepId,
@@ -446,7 +436,6 @@
 				}
 			}
 
-			// 3. Insert detail_racikan if any
 			if (racikanLines.length > 0) {
 				const racikanRows = racikanLines.map(item => ({
 					resep_id: resepId,
@@ -460,11 +449,11 @@
 				}
 			}
 
-			showToast(`Resep '${resepId}' untuk pasien '${pasienNama}' berhasil disimpan!`, 'success');
-			showAddModal = false;
+			toast.success(`Resep '${resepId}' untuk pasien '${pasienNama}' berhasil disimpan!`);
+			showAddSheet = false;
 			await loadResepList();
 		} catch (e: any) {
-			showToast(e?.message || 'Terjadi kesalahan saat menyimpan resep.', 'error');
+			toast.error(e?.message || 'Terjadi kesalahan saat menyimpan resep.');
 		} finally {
 			saving = false;
 		}
@@ -483,799 +472,360 @@
 	});
 </script>
 
-<div class="page-header">
-	<div>
-		<h1>📋 Resep Dokter</h1>
-		<p>Pencarian resep berdasarkan nama pasien dan kelola resep baru</p>
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<ClipboardList class="w-6 h-6 text-teal-600" />
+				Resep Dokter
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Kelola resep pasien dari dokter dan obat racikan</p>
+		</div>
+
+		<Button onclick={openAddSheet}>
+			<Plus class="w-4 h-4 mr-2" /> Resep Baru
+		</Button>
 	</div>
-	<div>
-		<button class="btn btn-primary" onclick={openAddModal}>
-			➕ Tambah Resep Baru
-		</button>
+
+	<!-- Toolbar & Search -->
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<div class="flex flex-wrap items-center gap-3 flex-1">
+			<div class="relative min-w-[240px] max-w-sm">
+				<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+				<Input
+					type="text"
+					placeholder="Cari pasien, dokter, no resep..."
+					bind:value={searchQuery}
+					oninput={handleSearchInput}
+					class="pl-9"
+				/>
+			</div>
+
+			<Select
+				bind:value={dateFilter}
+				onValueChange={loadResepList}
+				options={[
+					{ value: 'all', label: 'Semua Tanggal' },
+					{ value: 'today', label: 'Hari Ini' },
+					{ value: '7days', label: '7 Hari Terakhir' }
+				]}
+				class="w-40"
+			/>
+
+			<Button variant="outline" size="sm" onclick={loadResepList} disabled={loading}>
+				<RotateCcw class="w-3.5 h-3.5 mr-1" /> Refresh
+			</Button>
+		</div>
 	</div>
+
+	<!-- Data Table -->
+	<Table>
+		<TableHeader>
+			<TableRow>
+				<TableHead class="w-36">No. Resep</TableHead>
+				<TableHead>Tgl Resep</TableHead>
+				<TableHead>Nama Pasien</TableHead>
+				<TableHead>Dokter Penanggung Jawab</TableHead>
+				<TableHead>Alamat</TableHead>
+				<TableHead class="w-24 text-center">Aksi</TableHead>
+			</TableRow>
+		</TableHeader>
+		<TableBody>
+			{#if loading}
+				{#each Array(5) as _}
+					<TableRow>
+						<TableCell><Skeleton class="h-5 w-24" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-32" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-32" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-40" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-16 mx-auto" /></TableCell>
+					</TableRow>
+				{/each}
+			{:else if resepList.length === 0}
+				<TableRow>
+					<TableCell colspan={6} class="text-center py-8 text-slate-400 text-xs">
+						Tidak ada data resep ditemukan.
+					</TableCell>
+				</TableRow>
+			{:else}
+				{#each resepList as item}
+					<TableRow>
+						<TableCell>
+							<Badge variant="secondary" class="font-mono text-xs text-sky-700 bg-sky-50">{item.resep_id}</Badge>
+						</TableCell>
+						<TableCell class="text-xs text-slate-600">{formatDateIndo(item.tanggal_resep)}</TableCell>
+						<TableCell class="font-semibold text-slate-900 text-xs">
+							<span class="flex items-center gap-1.5">
+								<User class="w-3.5 h-3.5 text-teal-600 shrink-0" /> {item.pasien_nama}
+							</span>
+						</TableCell>
+						<TableCell class="text-xs text-slate-700">
+							<span class="flex items-center gap-1.5">
+								<UserCheck class="w-3.5 h-3.5 text-slate-400 shrink-0" /> {item.dokter_nama}
+							</span>
+						</TableCell>
+						<TableCell class="text-xs text-slate-500 truncate max-w-xs">{item.alamat_pasien || '—'}</TableCell>
+						<TableCell class="text-center">
+							<Button variant="outline" size="sm" class="h-7 text-xs hover:bg-sky-50 hover:text-sky-700" onclick={() => openDetailSheet(item)}>
+								<Eye class="w-3 h-3 mr-1" /> Detail
+							</Button>
+						</TableCell>
+					</TableRow>
+				{/each}
+			{/if}
+		</TableBody>
+	</Table>
 </div>
 
-{#if toastMsg}
-	<div class="toast toast-{toastType}">
-		<span>{toastMsg}</span>
-		<button onclick={() => (toastMsg = '')}>✕</button>
-	</div>
-{/if}
+<!-- Slide-in Sheet Detail Resep -->
+<Sheet
+	bind:open={showDetailSheet}
+	title={`Detail Resep ${selectedResep?.resep_id ?? ''}`}
+	description="Rincian pasien, dokter, dan daftar obat resep."
+>
+	{#if selectedResep}
+		<div class="space-y-6 pt-2">
 
-<!-- Filter & Search Bar -->
-<div class="card" style="margin-bottom: 1.5rem;">
-	<div class="filter-row">
-		<div class="search-box">
-			<span class="search-icon">🔍</span>
-			<input
-				type="text"
-				placeholder="Cari berdasarkan nama pasien, nama dokter, atau no. resep..."
-				bind:value={searchQuery}
-				oninput={handleSearchInput}
-			/>
-			{#if searchQuery}
-				<button class="clear-btn" onclick={() => { searchQuery = ''; loadResepList(); }}>✕</button>
+			<!-- Pasien Header Card -->
+			<div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+				<div class="flex items-center justify-between border-b border-slate-200 pb-2">
+					<span class="font-bold text-slate-900 text-sm">{selectedResep.pasien_nama}</span>
+					<Badge variant="secondary">{formatDateIndo(selectedResep.tanggal_resep)}</Badge>
+				</div>
+				<div class="grid grid-cols-2 gap-2 text-slate-600">
+					<div>Dokter: <strong class="text-slate-800">{selectedResep.dokter_nama}</strong></div>
+					<div>Alamat: <span class="text-slate-800">{selectedResep.alamat_pasien || '—'}</span></div>
+				</div>
+				{#if selectedResep.ket_resep}
+					<div class="text-slate-500 pt-1 border-t border-slate-100">
+						Ket: <em>{selectedResep.ket_resep}</em>
+					</div>
+				{/if}
+			</div>
+
+			{#if loadingDetail}
+				<div class="space-y-2">
+					<Skeleton class="h-5 w-40" />
+					<Skeleton class="h-16 w-full" />
+				</div>
+			{:else}
+				<!-- Non-Racikan Table -->
+				<div class="space-y-2">
+					<h4 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+						<Pill class="w-4 h-4 text-teal-600" /> Detail Obat (Non-Racikan)
+					</h4>
+
+					{#if viewDetails.length === 0}
+						<p class="text-xs text-slate-400 italic">Tidak ada obat non-racikan.</p>
+					{:else}
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Nama Obat</TableHead>
+									<TableHead class="text-right">Qty</TableHead>
+									<TableHead class="text-right">Harga</TableHead>
+									<TableHead class="text-right">Subtotal</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{#each viewDetails as det}
+									<TableRow>
+										<TableCell class="font-medium text-xs">{det.obat_nama}</TableCell>
+										<TableCell class="text-right text-xs">{det.qty_asli}</TableCell>
+										<TableCell class="text-right text-xs">Rp{formatRp(det.harga_per_obat)}</TableCell>
+										<TableCell class="text-right font-bold text-xs text-teal-700">
+											Rp{formatRp(det.qty_asli * det.harga_per_obat)}
+										</TableCell>
+									</TableRow>
+								{/each}
+							</TableBody>
+						</Table>
+					{/if}
+				</div>
+
+				<!-- Racikan Table -->
+				<div class="space-y-2 pt-2">
+					<h4 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+						<FlaskConical class="w-4 h-4 text-purple-600" /> Detail Obat Racikan
+					</h4>
+
+					{#if viewRacikan.length === 0}
+						<p class="text-xs text-slate-400 italic">Tidak ada obat racikan.</p>
+					{:else}
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Nama Obat Racikan</TableHead>
+									<TableHead class="text-right">Qty Racik</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{#each viewRacikan as rac}
+									<TableRow>
+										<TableCell class="font-medium text-xs">{rac.obat_nama}</TableCell>
+										<TableCell class="text-right font-bold text-xs">{rac.qty_racikan}</TableCell>
+									</TableRow>
+								{/each}
+							</TableBody>
+						</Table>
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	{#snippet footer()}
+		<Button variant="outline" size="sm" onclick={() => (showDetailSheet = false)}>Tutup</Button>
+	{/snippet}
+</Sheet>
+
+<!-- Slide-in Sheet Form Resep Baru -->
+<Sheet
+	bind:open={showAddSheet}
+	title="Form Tambah Resep Baru"
+	description="Input data resep dokter beserta rincian obat."
+	side="right"
+>
+	<div class="space-y-4 pt-2">
+
+		<!-- Pasien & Dokter Info -->
+		<div class="grid grid-cols-2 gap-3">
+			<div class="space-y-1">
+				<label for="resep-id-input" class="text-xs font-semibold text-slate-700">No. Resep</label>
+				<Input id="resep-id-input" type="text" bind:value={inputResepId} class="font-mono bg-slate-50 text-xs" />
+			</div>
+			<div class="space-y-1">
+				<label for="resep-date-input" class="text-xs font-semibold text-slate-700">Tgl Resep</label>
+				<Input id="resep-date-input" type="date" bind:value={inputTanggalResep} class="text-xs" />
+			</div>
+		</div>
+
+		<div class="grid grid-cols-2 gap-3">
+			<div class="space-y-1">
+				<label for="pasien-nama-input" class="text-xs font-semibold text-slate-700">Nama Pasien *</label>
+				<Input id="pasien-nama-input" type="text" bind:value={inputPasienNama} placeholder="Nama pasien..." class="text-xs" />
+			</div>
+			<div class="space-y-1">
+				<label for="dokter-nama-input" class="text-xs font-semibold text-slate-700">Nama Dokter *</label>
+				<Input id="dokter-nama-input" type="text" bind:value={inputDokterNama} placeholder="Nama dokter..." class="text-xs" />
+			</div>
+		</div>
+
+		<div class="space-y-1">
+			<label for="alamat-pasien-input" class="text-xs font-semibold text-slate-700">Alamat Pasien</label>
+			<Input id="alamat-pasien-input" type="text" bind:value={inputAlamatPasien} placeholder="Alamat lengkap..." class="text-xs" />
+		</div>
+
+		<!-- Non-Racikan Input Box -->
+		<div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+			<h4 class="text-xs font-bold text-slate-800 flex items-center gap-1">
+				<Pill class="w-3.5 h-3.5 text-teal-600" /> Tambah Obat Non-Racikan
+			</h4>
+
+			<div class="space-y-2">
+				<div class="relative">
+					<Input
+						type="text"
+						placeholder="Cari obat..."
+						bind:value={obatSearchQuery}
+						oninput={(e) => searchObatForDetail((e.target as HTMLInputElement).value)}
+						class="text-xs"
+					/>
+					{#if obatSearchResults.length > 0}
+						<div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-lg border border-slate-200 shadow-lg max-h-40 overflow-y-auto z-30 text-xs">
+							{#each obatSearchResults as o}
+								<button
+									type="button"
+									onclick={() => selectObatForDetail(o)}
+									class="w-full text-left p-2 hover:bg-teal-50 flex justify-between cursor-pointer"
+								>
+									<span>{o.obat_nama}</span>
+									<span class="text-slate-400">{o.obat_id}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<div class="grid grid-cols-3 gap-2 items-center">
+					<Input type="number" min="1" placeholder="Qty Asli" bind:value={inputQtyAsli} class="text-xs" />
+					<Input type="number" min="0" placeholder="Harga/Obat" bind:value={inputHargaPerObat} class="text-xs" />
+					<Button size="sm" class="h-9 text-xs" onclick={addItemLine}>+ Tambah</Button>
+				</div>
+			</div>
+
+			{#if itemLines.length > 0}
+				<div class="space-y-1 pt-1">
+					{#each itemLines as line, idx}
+						<div class="flex items-center justify-between p-1.5 rounded bg-white border border-slate-200 text-xs">
+							<span>{line.obat_nama} ({line.qty_asli}x @ Rp{formatRp(line.harga_per_obat)})</span>
+							<Button variant="ghost" size="icon" class="h-6 w-6 text-red-500" onclick={() => removeItemLine(idx)}>
+								<Trash2 class="w-3 h-3" />
+							</Button>
+						</div>
+					{/each}
+				</div>
 			{/if}
 		</div>
 
-		<div class="filter-group">
-			<label for="date-filter-select">Tanggal:</label>
-			<select id="date-filter-select" bind:value={dateFilter} onchange={loadResepList}>
-				<option value="all">Semua Tanggal</option>
-				<option value="today">Hari Ini</option>
-				<option value="7days">7 Hari Terakhir</option>
-			</select>
-		</div>
+		<!-- Racikan Input Box -->
+		<div class="p-3 rounded-xl bg-purple-50/50 border border-purple-100 space-y-3">
+			<h4 class="text-xs font-bold text-purple-900 flex items-center gap-1">
+				<FlaskConical class="w-3.5 h-3.5 text-purple-600" /> Tambah Obat Racikan
+			</h4>
 
-		<button class="btn btn-secondary" onclick={loadResepList} disabled={loading}>
-			🔄 Refresh
-		</button>
-	</div>
-</div>
-
-<!-- Table Resep List -->
-<div class="card">
-	{#if loading}
-		<div class="loading-state">
-			<div class="spinner"></div>
-			<p>Memuat data resep...</p>
-		</div>
-	{:else if resepList.length === 0}
-		<div class="empty-state">
-			<span style="font-size: 3rem;">📝</span>
-			<h3>Tidak ada data resep</h3>
-			<p>
-				{#if searchQuery}
-					Pencarian untuk "{searchQuery}" tidak ditemukan.
-				{:else}
-					Belum ada data resep tersimpan di sistem.
-				{/if}
-			</p>
-			<button class="btn btn-primary" style="margin-top: 1rem;" onclick={openAddModal}>
-				➕ Tambah Resep Baru
-			</button>
-		</div>
-	{:else}
-		<div class="table-responsive">
-			<table class="table">
-				<thead>
-					<tr>
-						<th>No. Resep</th>
-						<th>Tanggal Resep</th>
-						<th>Nama Pasien</th>
-						<th>Nama Dokter</th>
-						<th>Alamat Pasien</th>
-						<th>Keterangan</th>
-						<th style="text-align: center;">Aksi</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each resepList as item}
-						<tr>
-							<td>
-								<span class="badge badge-primary">{item.resep_id}</span>
-							</td>
-							<td>{formatDateIndo(item.tanggal_resep)}</td>
-							<td>
-								<strong>{item.pasien_nama}</strong>
-							</td>
-							<td>{item.dokter_nama}</td>
-							<td>{item.alamat_pasien || '-'}</td>
-							<td>{item.ket_resep || '-'}</td>
-							<td style="text-align: center;">
-								<button class="btn btn-sm btn-info" onclick={() => openDetailModal(item)}>
-									👁️ Detail
+			<div class="space-y-2">
+				<div class="relative">
+					<Input
+						type="text"
+						placeholder="Cari obat racikan..."
+						bind:value={racikanSearchQuery}
+						oninput={(e) => searchObatForRacikan((e.target as HTMLInputElement).value)}
+						class="text-xs"
+					/>
+					{#if racikanSearchResults.length > 0}
+						<div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-lg border border-slate-200 shadow-lg max-h-40 overflow-y-auto z-30 text-xs">
+							{#each racikanSearchResults as o}
+								<button
+									type="button"
+									onclick={() => selectObatForRacikan(o)}
+									class="w-full text-left p-2 hover:bg-purple-50 flex justify-between cursor-pointer"
+								>
+									<span>{o.obat_nama}</span>
+									<span class="text-slate-400">{o.obat_id}</span>
 								</button>
-							</td>
-						</tr>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<div class="grid grid-cols-2 gap-2 items-center">
+					<Input type="number" min="1" placeholder="Qty Racik" bind:value={inputQtyRacikan} class="text-xs" />
+					<Button size="sm" variant="secondary" class="h-9 text-xs" onclick={addRacikanLine}>+ Tambah Racik</Button>
+				</div>
+			</div>
+
+			{#if racikanLines.length > 0}
+				<div class="space-y-1 pt-1">
+					{#each racikanLines as line, idx}
+						<div class="flex items-center justify-between p-1.5 rounded bg-white border border-purple-200 text-xs">
+							<span>{line.obat_nama} (Qty: {line.qty_racikan})</span>
+							<Button variant="ghost" size="icon" class="h-6 w-6 text-red-500" onclick={() => removeRacikanLine(idx)}>
+								<Trash2 class="w-3 h-3" />
+							</Button>
+						</div>
 					{/each}
-				</tbody>
-			</table>
-		</div>
-	{/if}
-</div>
-
-<!-- Modal Detail Resep -->
-{#if showDetailModal && selectedResep}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal-backdrop" onclick={() => (showDetailModal = false)}>
-		<div class="modal-content modal-lg" onclick={(e) => e.stopPropagation()}>
-			<div class="modal-header">
-				<h2>📋 Detail Resep: {selectedResep.resep_id}</h2>
-				<button class="modal-close" onclick={() => (showDetailModal = false)}>✕</button>
-			</div>
-
-			<div class="modal-body">
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="info-label">No. Resep</span>
-						<span class="info-val font-mono">{selectedResep.resep_id}</span>
-					</div>
-					<div class="info-item">
-						<span class="info-label">Tanggal Resep</span>
-						<span class="info-val">{formatDateIndo(selectedResep.tanggal_resep)}</span>
-					</div>
-					<div class="info-item">
-						<span class="info-label">Nama Pasien</span>
-						<span class="info-val strong">{selectedResep.pasien_nama}</span>
-					</div>
-					<div class="info-item">
-						<span class="info-label">Nama Dokter</span>
-						<span class="info-val">{selectedResep.dokter_nama}</span>
-					</div>
-					<div class="info-item full-width">
-						<span class="info-label">Alamat Pasien</span>
-						<span class="info-val">{selectedResep.alamat_pasien || '-'}</span>
-					</div>
-					{#if selectedResep.ket_resep}
-						<div class="info-item full-width">
-							<span class="info-label">Keterangan Resep</span>
-							<span class="info-val">{selectedResep.ket_resep}</span>
-						</div>
-					{/if}
 				</div>
-
-				<hr class="divider" />
-
-				{#if loadingDetail}
-					<div class="loading-state">
-						<div class="spinner"></div>
-						<p>Memuat rincian obat resep...</p>
-					</div>
-				{:else}
-					<!-- Section Obat Non-Racikan -->
-					<h3 class="section-title">💊 Detail Obat (Non-Racikan)</h3>
-					{#if viewDetails.length === 0}
-						<p class="text-muted">Tidak ada obat non-racikan dalam resep ini.</p>
-					{:else}
-						<div class="table-responsive" style="margin-bottom: 1.5rem;">
-							<table class="table table-striped">
-								<thead>
-									<tr>
-										<th>No</th>
-										<th>ID Obat</th>
-										<th>Nama Obat</th>
-										<th style="text-align: right;">Qty Resep</th>
-										<th style="text-align: right;">Qty Asli</th>
-										<th style="text-align: right;">Harga / Obat</th>
-										<th style="text-align: right;">Subtotal</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each viewDetails as det, idx}
-										<tr>
-											<td>{idx + 1}</td>
-											<td class="font-mono">{det.obat_id}</td>
-											<td><strong>{det.obat_nama}</strong></td>
-											<td style="text-align: right;">{det.qty_resep}</td>
-											<td style="text-align: right;">{det.qty_asli}</td>
-											<td style="text-align: right;">Rp {formatRp(det.harga_per_obat)}</td>
-											<td style="text-align: right;">Rp {formatRp(det.qty_asli * det.harga_per_obat)}</td>
-										</tr>
-									{/each}
-								</tbody>
-								<tfoot>
-									<tr>
-										<td colspan="6" style="text-align: right; font-weight: bold;">Total Biaya Obat (Est.):</td>
-										<td style="text-align: right; font-weight: bold; color: var(--color-primary, #0284c7);">
-											Rp {formatRp(viewDetails.reduce((sum, d) => sum + (d.qty_asli * d.harga_per_obat), 0))}
-										</td>
-									</tr>
-								</tfoot>
-							</table>
-						</div>
-					{/if}
-
-					<!-- Section Obat Racikan -->
-					<h3 class="section-title">🧪 Detail Obat Racikan</h3>
-					{#if viewRacikan.length === 0}
-						<p class="text-muted">Tidak ada obat racikan dalam resep ini.</p>
-					{:else}
-						<div class="table-responsive">
-							<table class="table table-striped">
-								<thead>
-									<tr>
-										<th>No</th>
-										<th>ID Obat</th>
-										<th>Nama Obat</th>
-										<th style="text-align: right;">Qty Racikan</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each viewRacikan as rac, idx}
-										<tr>
-											<td>{idx + 1}</td>
-											<td class="font-mono">{rac.obat_id}</td>
-											<td><strong>{rac.obat_nama}</strong></td>
-											<td style="text-align: right;">{rac.qty_racikan}</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					{/if}
-				{/if}
-			</div>
-
-			<div class="modal-footer">
-				<button class="btn btn-secondary" onclick={() => (showDetailModal = false)}>
-					Tutup
-				</button>
-			</div>
+			{/if}
 		</div>
 	</div>
-{/if}
 
-<!-- Modal Form Tambah Resep Baru -->
-{#if showAddModal}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal-backdrop" onclick={() => (showAddModal = false)}>
-		<div class="modal-content modal-xl" onclick={(e) => e.stopPropagation()}>
-			<div class="modal-header">
-				<h2>➕ Form Tambah Resep Baru</h2>
-				<button class="modal-close" onclick={() => (showAddModal = false)}>✕</button>
-			</div>
-
-			<div class="modal-body">
-				<!-- Header Inputs -->
-				<div class="form-grid">
-					<div class="form-group">
-						<label for="resep-id-input">No. Resep <span class="required">*</span></label>
-						<input id="resep-id-input" type="text" bind:value={inputResepId} placeholder="e.g. RSP-20260722-001" />
-					</div>
-
-					<div class="form-group">
-						<label for="resep-date-input">Tanggal Resep <span class="required">*</span></label>
-						<input id="resep-date-input" type="date" bind:value={inputTanggalResep} />
-					</div>
-
-					<div class="form-group">
-						<label for="pasien-nama-input">Nama Pasien <span class="required">*</span></label>
-						<input id="pasien-nama-input" type="text" bind:value={inputPasienNama} placeholder="Nama lengkap pasien" />
-					</div>
-
-					<div class="form-group">
-						<label for="dokter-nama-input">Nama Dokter <span class="required">*</span></label>
-						<input id="dokter-nama-input" type="text" bind:value={inputDokterNama} placeholder="Nama dokter penanggung jawab" />
-					</div>
-
-					<div class="form-group full-width">
-						<label for="alamat-pasien-input">Alamat Pasien</label>
-						<input id="alamat-pasien-input" type="text" bind:value={inputAlamatPasien} placeholder="Alamat tinggal pasien" />
-					</div>
-
-					<div class="form-group full-width">
-						<label for="ket-resep-input">Keterangan Resep</label>
-						<input id="ket-resep-input" type="text" bind:value={inputKetResep} placeholder="Catatan/keterangan tambahan (opsional)" />
-					</div>
-				</div>
-
-				<hr class="divider" />
-
-				<!-- Section Input Non-Racikan -->
-				<div class="section-box">
-					<h3 class="section-title">💊 1. Input Obat Non-Racikan</h3>
-					
-					<div class="input-line-row">
-						<div class="autocomplete-container" style="flex: 2; min-width: 250px;">
-							<label for="search-obat-input">Cari Obat:</label>
-							<input
-								id="search-obat-input"
-								type="text"
-								placeholder="Ketik nama atau kode obat..."
-								bind:value={obatSearchQuery}
-								oninput={(e) => searchObatForDetail((e.target as HTMLInputElement).value)}
-							/>
-							{#if obatSearchResults.length > 0}
-								<div class="autocomplete-results">
-									{#each obatSearchResults as o}
-										<!-- svelte-ignore a11y_click_events_have_key_events -->
-										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div class="autocomplete-item" onclick={() => selectObatForDetail(o)}>
-											<strong>{o.obat_nama}</strong> <span class="text-muted font-mono">({o.obat_id})</span>
-										</div>
-									{/each}
-								</div>
-							{/if}
-						</div>
-
-						<div class="form-group" style="width: 100px;">
-							<label for="input-qty-resep">Qty Resep:</label>
-							<input id="input-qty-resep" type="number" min="1" bind:value={inputQtyResep} />
-						</div>
-
-						<div class="form-group" style="width: 100px;">
-							<label for="input-qty-asli">Qty Asli:</label>
-							<input id="input-qty-asli" type="number" min="1" bind:value={inputQtyAsli} />
-						</div>
-
-						<div class="form-group" style="width: 130px;">
-							<label for="input-harga-per-obat">Harga / Obat (Rp):</label>
-							<input id="input-harga-per-obat" type="number" min="0" bind:value={inputHargaPerObat} />
-						</div>
-
-						<div style="align-self: flex-end;">
-							<button class="btn btn-success" onclick={addItemLine}>
-								➕ Tambah
-							</button>
-						</div>
-					</div>
-
-					<!-- Table Added Non-Racikan -->
-					{#if itemLines.length > 0}
-						<div class="table-responsive" style="margin-top: 1rem;">
-							<table class="table table-bordered">
-								<thead>
-									<tr>
-										<th>No</th>
-										<th>ID Obat</th>
-										<th>Nama Obat</th>
-										<th style="text-align: right;">Qty Resep</th>
-										<th style="text-align: right;">Qty Asli</th>
-										<th style="text-align: right;">Harga / Obat</th>
-										<th style="text-align: right;">Subtotal</th>
-										<th style="text-align: center;">Aksi</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each itemLines as line, idx}
-										<tr>
-											<td>{idx + 1}</td>
-											<td class="font-mono">{line.obat_id}</td>
-											<td><strong>{line.obat_nama}</strong></td>
-											<td style="text-align: right;">{line.qty_resep}</td>
-											<td style="text-align: right;">{line.qty_asli}</td>
-											<td style="text-align: right;">Rp {formatRp(line.harga_per_obat)}</td>
-											<td style="text-align: right;">Rp {formatRp(line.qty_asli * line.harga_per_obat)}</td>
-											<td style="text-align: center;">
-												<button class="btn btn-sm btn-danger" onclick={() => removeItemLine(idx)}>
-													🗑️
-												</button>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					{/if}
-				</div>
-
-				<hr class="divider" />
-
-				<!-- Section Input Racikan -->
-				<div class="section-box">
-					<h3 class="section-title">🧪 2. Input Obat Racikan</h3>
-					
-					<div class="input-line-row">
-						<div class="autocomplete-container" style="flex: 2; min-width: 250px;">
-							<label for="search-racikan-input">Cari Obat Racikan:</label>
-							<input
-								id="search-racikan-input"
-								type="text"
-								placeholder="Ketik nama atau kode obat..."
-								bind:value={racikanSearchQuery}
-								oninput={(e) => searchObatForRacikan((e.target as HTMLInputElement).value)}
-							/>
-							{#if racikanSearchResults.length > 0}
-								<div class="autocomplete-results">
-									{#each racikanSearchResults as o}
-										<!-- svelte-ignore a11y_click_events_have_key_events -->
-										<!-- svelte-ignore a11y_no_static_element_interactions -->
-										<div class="autocomplete-item" onclick={() => selectObatForRacikan(o)}>
-											<strong>{o.obat_nama}</strong> <span class="text-muted font-mono">({o.obat_id})</span>
-										</div>
-									{/each}
-								</div>
-							{/if}
-						</div>
-
-						<div class="form-group" style="width: 120px;">
-							<label for="input-qty-racikan">Qty Racikan:</label>
-							<input id="input-qty-racikan" type="number" min="1" bind:value={inputQtyRacikan} />
-						</div>
-
-						<div style="align-self: flex-end;">
-							<button class="btn btn-warning" onclick={addRacikanLine}>
-								➕ Tambah Racikan
-							</button>
-						</div>
-					</div>
-
-					<!-- Table Added Racikan -->
-					{#if racikanLines.length > 0}
-						<div class="table-responsive" style="margin-top: 1rem;">
-							<table class="table table-bordered">
-								<thead>
-									<tr>
-										<th>No</th>
-										<th>ID Obat</th>
-										<th>Nama Obat</th>
-										<th style="text-align: right;">Qty Racikan</th>
-										<th style="text-align: center;">Aksi</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each racikanLines as line, idx}
-										<tr>
-											<td>{idx + 1}</td>
-											<td class="font-mono">{line.obat_id}</td>
-											<td><strong>{line.obat_nama}</strong></td>
-											<td style="text-align: right;">{line.qty_racikan}</td>
-											<td style="text-align: center;">
-												<button class="btn btn-sm btn-danger" onclick={() => removeRacikanLine(idx)}>
-													🗑️
-												</button>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					{/if}
-				</div>
-			</div>
-
-			<div class="modal-footer">
-				<button class="btn btn-secondary" onclick={() => (showAddModal = false)} disabled={saving}>
-					Batal
-				</button>
-				<button class="btn btn-primary" onclick={simpanResep} disabled={saving}>
-					{#if saving}
-						💾 Menyimpan...
-					{:else}
-						💾 Simpan Resep
-					{/if}
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
-<style>
-	.filter-row {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 1rem;
-		align-items: center;
-	}
-
-	.search-box {
-		position: relative;
-		flex: 1;
-		min-width: 280px;
-		display: flex;
-		align-items: center;
-	}
-
-	.search-icon {
-		position: absolute;
-		left: 0.75rem;
-		color: #94a3b8;
-	}
-
-	.search-box input {
-		width: 100%;
-		padding: 0.6rem 2.2rem 0.6rem 2.4rem;
-		border: 1px solid #cbd5e1;
-		border-radius: 0.5rem;
-		font-size: 0.95rem;
-	}
-
-	.clear-btn {
-		position: absolute;
-		right: 0.75rem;
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: #94a3b8;
-		font-size: 0.9rem;
-	}
-
-	.filter-group {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.filter-group select {
-		padding: 0.6rem 1rem;
-		border: 1px solid #cbd5e1;
-		border-radius: 0.5rem;
-		font-size: 0.95rem;
-		background-color: white;
-	}
-
-	.empty-state {
-		text-align: center;
-		padding: 3rem 1rem;
-		color: #64748b;
-	}
-
-	.loading-state {
-		text-align: center;
-		padding: 2.5rem 1rem;
-		color: #64748b;
-	}
-
-	.spinner {
-		width: 2.5rem;
-		height: 2.5rem;
-		border: 3px solid #e2e8f0;
-		border-top-color: #0284c7;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-		margin: 0 auto 1rem auto;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.info-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 1rem;
-		background: #f8fafc;
-		padding: 1.25rem;
-		border-radius: 0.5rem;
-		border: 1px solid #e2e8f0;
-	}
-
-	.info-item {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.info-item.full-width {
-		grid-column: 1 / -1;
-	}
-
-	.info-label {
-		font-size: 0.8rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: #64748b;
-		font-weight: 600;
-	}
-
-	.info-val {
-		font-size: 1rem;
-		color: #1e293b;
-	}
-
-	.font-mono {
-		font-family: monospace;
-	}
-
-	.divider {
-		border: none;
-		border-top: 1px dashed #e2e8f0;
-		margin: 1.5rem 0;
-	}
-
-	.section-title {
-		font-size: 1.1rem;
-		font-weight: 600;
-		margin-bottom: 0.75rem;
-		color: #1e293b;
-	}
-
-	.form-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 1rem;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.form-group.full-width {
-		grid-column: 1 / -1;
-	}
-
-	.form-group label {
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: #334155;
-	}
-
-	.required {
-		color: #ef4444;
-	}
-
-	.form-group input {
-		padding: 0.55rem 0.85rem;
-		border: 1px solid #cbd5e1;
-		border-radius: 0.4rem;
-		font-size: 0.95rem;
-	}
-
-	.section-box {
-		background: #f8fafc;
-		padding: 1.25rem;
-		border-radius: 0.5rem;
-		border: 1px solid #e2e8f0;
-	}
-
-	.input-line-row {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 1rem;
-		align-items: flex-end;
-	}
-
-	.autocomplete-container {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.autocomplete-container label {
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: #334155;
-	}
-
-	.autocomplete-container input {
-		padding: 0.55rem 0.85rem;
-		border: 1px solid #cbd5e1;
-		border-radius: 0.4rem;
-		font-size: 0.95rem;
-		width: 100%;
-	}
-
-	.autocomplete-results {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		background: white;
-		border: 1px solid #cbd5e1;
-		border-radius: 0.4rem;
-		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-		max-height: 200px;
-		overflow-y: auto;
-		z-index: 100;
-	}
-
-	.autocomplete-item {
-		padding: 0.6rem 0.85rem;
-		cursor: pointer;
-		border-bottom: 1px solid #f1f5f9;
-		font-size: 0.9rem;
-	}
-
-	.autocomplete-item:hover {
-		background: #f0f9ff;
-	}
-
-	.modal-backdrop {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(15, 23, 42, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-		padding: 1rem;
-		backdrop-filter: blur(4px);
-	}
-
-	.modal-content {
-		background: white;
-		border-radius: 0.75rem;
-		box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-		width: 100%;
-		max-height: 90vh;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-
-	.modal-lg {
-		max-width: 800px;
-	}
-
-	.modal-xl {
-		max-width: 1000px;
-	}
-
-	.modal-header {
-		padding: 1.25rem 1.5rem;
-		border-bottom: 1px solid #e2e8f0;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.modal-header h2 {
-		font-size: 1.25rem;
-		margin: 0;
-		color: #0f172a;
-	}
-
-	.modal-close {
-		background: none;
-		border: none;
-		font-size: 1.25rem;
-		cursor: pointer;
-		color: #64748b;
-	}
-
-	.modal-body {
-		padding: 1.5rem;
-		overflow-y: auto;
-		flex: 1;
-	}
-
-	.modal-footer {
-		padding: 1rem 1.5rem;
-		border-top: 1px solid #e2e8f0;
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.75rem;
-		background: #f8fafc;
-	}
-
-	.toast {
-		position: fixed;
-		bottom: 1.5rem;
-		right: 1.5rem;
-		padding: 0.85rem 1.25rem;
-		border-radius: 0.5rem;
-		color: white;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-		z-index: 2000;
-	}
-
-	.toast-success {
-		background: #10b981;
-	}
-
-	.toast-error {
-		background: #ef4444;
-	}
-
-	.toast button {
-		background: none;
-		border: none;
-		color: white;
-		cursor: pointer;
-		font-size: 1.1rem;
-	}
-</style>
+	{#snippet footer()}
+		<Button variant="outline" size="sm" onclick={() => (showAddSheet = false)}>Batal</Button>
+		<Button size="sm" onclick={simpanResep} disabled={saving}>
+			{#if saving}Menyimpan...{:else}<Save class="w-3.5 h-3.5 mr-1" /> Simpan Resep{/if}
+		</Button>
+	{/snippet}
+</Sheet>

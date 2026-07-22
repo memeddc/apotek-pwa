@@ -2,6 +2,14 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import type { Ikartu_stok, Iobat } from '$lib/db/types';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Select } from '$lib/components/ui/select';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { History, Search, RotateCcw, X, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-svelte';
 
 	type KartuRow = Ikartu_stok & { obat_nama: string };
 	let rows = $state<KartuRow[]>([]);
@@ -12,6 +20,7 @@
 	let searchLoading = $state(false);
 	let errorMessage = $state('');
 	let limit = $state(100);
+	let limitStr = $state('100');
 	let searchTimer: ReturnType<typeof setTimeout>;
 	let searchRequest = 0;
 
@@ -29,7 +38,7 @@
 		const { data, error } = await supabase.from('obat').select('obat_id, obat_nama, jenis_id').or(`obat_id.ilike.%${safe}%,obat_nama.ilike.%${safe}%`).order('obat_nama').limit(20);
 		if (request !== searchRequest) return;
 		searchLoading = false;
-		if (error) { errorMessage = error.message; return; }
+		if (error) { errorMessage = error.message; toast.error(errorMessage); return; }
 		obatResults = (data ?? []) as Iobat[];
 	}
 
@@ -63,7 +72,10 @@
 			const kartu = (data ?? []) as Ikartu_stok[];
 			const names = await medicineMap(kartu.map((item) => item.obat_id));
 			rows = kartu.map((item) => ({ ...item, obat_nama: names.get(item.obat_id) ?? item.obat_id }));
-		} catch (error) { errorMessage = error instanceof Error ? error.message : 'Gagal memuat kartu stok.'; }
+		} catch (error) {
+			errorMessage = error instanceof Error ? error.message : 'Gagal memuat kartu stok.';
+			toast.error(errorMessage);
+		}
 		loading = false;
 	}
 
@@ -72,20 +84,146 @@
 	onMount(loadKartu);
 </script>
 
-<div class="page-header"><h1>Kartu Stok</h1><p>Riwayat pergerakan stok obat: masuk, keluar, dan stok opname.</p></div>
-<div class="crud-toolbar">
-	<div class="kartu-search"><div class="search-box"><span class="search-icon">⌕</span><input type="search" bind:value={obatSearch} oninput={handleSearchInput} autocomplete="off" placeholder="Cari nama atau kode obat..." /></div>
-		{#if searchLoading}<small>Mencari obat...</small>{/if}
-		{#if !selectedObat && obatResults.length > 0}<div class="search-results">{#each obatResults as obat}<button type="button" onclick={() => pilihObat(obat)}><strong>{obat.obat_nama}</strong><span>{obat.obat_id}</span></button>{/each}</div>{/if}
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<History class="w-6 h-6 text-teal-600" />
+				Kartu Stok
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Audit trail riwayat mutasi stok obat (masuk, keluar, & opname)</p>
+		</div>
+
+		<Button variant="outline" size="sm" onclick={loadKartu} disabled={loading}>
+			<RotateCcw class="w-3.5 h-3.5 mr-1.5" /> Muat Ulang
+		</Button>
 	</div>
-	<div class="filter-group"><select aria-label="Jumlah riwayat" value={limit} onchange={changeLimit}><option value="100">100 riwayat</option><option value="250">250 riwayat</option><option value="500">500 riwayat</option></select>{#if selectedObat}<button class="btn btn-ghost" type="button" onclick={clearObat}>Semua obat</button>{/if}</div>
-	<button class="btn btn-ghost" type="button" onclick={loadKartu} disabled={loading}>Muat ulang</button>
+
+	<!-- Toolbar & Search -->
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<div class="flex flex-wrap items-center gap-3 flex-1">
+			<div class="relative min-w-[240px] max-w-sm">
+				<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+				<Input
+					type="search"
+					bind:value={obatSearch}
+					oninput={handleSearchInput}
+					placeholder="Filter berdasarkan nama / kode obat..."
+					class="pl-9"
+				/>
+
+				{#if searchLoading}
+					<div class="absolute left-0 right-0 top-full mt-1 bg-white p-2 rounded-lg border border-slate-200 shadow-lg text-xs text-slate-400 z-20">
+						Mencari obat...
+					</div>
+				{:else if !selectedObat && obatResults.length > 0}
+					<div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl max-h-56 overflow-y-auto z-30 divide-y divide-slate-100">
+						{#each obatResults as obat}
+							<button
+								type="button"
+								onclick={() => pilihObat(obat)}
+								class="w-full text-left p-2.5 hover:bg-teal-50 transition-colors flex items-center justify-between text-xs cursor-pointer"
+							>
+								<span class="font-semibold text-slate-900">{obat.obat_nama}</span>
+								<Badge variant="secondary" class="text-[10px]">{obat.obat_id}</Badge>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<Select
+				bind:value={limitStr}
+				onValueChange={(val) => { limit = Number(val); loadKartu(); }}
+				options={[
+					{ value: '100', label: '100 Riwayat' },
+					{ value: '250', label: '250 Riwayat' },
+					{ value: '500', label: '500 Riwayat' }
+				]}
+				class="w-36"
+			/>
+
+			{#if selectedObat}
+				<Button variant="ghost" size="sm" onclick={clearObat} class="text-xs text-slate-600">
+					<X class="w-3.5 h-3.5 mr-1" /> Reset Filter ({selectedObat.obat_nama})
+				</Button>
+			{/if}
+		</div>
+
+		<div class="text-xs text-slate-500">
+			{selectedObat ? `Riwayat khusus: ${selectedObat.obat_nama}` : 'Menampilkan mutasi terbaru'}
+		</div>
+	</div>
+
+	<!-- Data Table -->
+	<Table>
+		<TableHeader>
+			<TableRow>
+				<TableHead class="w-44">Waktu</TableHead>
+				<TableHead>Nama Obat</TableHead>
+				<TableHead class="text-center">Jenis Mutasi</TableHead>
+				<TableHead class="text-center">Jumlah Mutasi</TableHead>
+				<TableHead>No. Referensi Transaksi</TableHead>
+			</TableRow>
+		</TableHeader>
+		<TableBody>
+			{#if loading}
+				{#each Array(6) as _}
+					<TableRow>
+						<TableCell><Skeleton class="h-5 w-28" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-40" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-20 mx-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-16 mx-auto" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-28" /></TableCell>
+					</TableRow>
+				{/each}
+			{:else if rows.length === 0}
+				<TableRow>
+					<TableCell colspan={5} class="text-center py-8 text-slate-400 text-xs">
+						Belum ada riwayat mutasi kartu stok.
+					</TableCell>
+				</TableRow>
+			{:else}
+				{#each rows as row}
+					<TableRow>
+						<TableCell class="text-xs text-slate-600 font-medium">
+							{formatWaktu(row.tanggal_waktu)}
+						</TableCell>
+						<TableCell class="font-semibold text-slate-900 text-xs">
+							{row.obat_nama}
+							<span class="block text-[10px] font-mono text-purple-700">{row.obat_id}</span>
+						</TableCell>
+						<TableCell class="text-center">
+							{#if jenisMutasi(row) === 'Masuk'}
+								<Badge variant="success" class="text-[10px] inline-flex items-center gap-1">
+									<ArrowDownRight class="w-3 h-3" /> Masuk
+								</Badge>
+							{:else if jenisMutasi(row) === 'Keluar'}
+								<Badge variant="destructive" class="text-[10px] inline-flex items-center gap-1">
+									<ArrowUpRight class="w-3 h-3" /> Keluar
+								</Badge>
+							{:else}
+								<Badge variant="warning" class="text-[10px] inline-flex items-center gap-1">
+									<RefreshCw class="w-3 h-3" /> Opname
+								</Badge>
+							{/if}
+						</TableCell>
+						<TableCell class="text-center font-bold text-xs">
+							{#if row.qty > 0}
+								<span class="text-emerald-700">{formatJumlah(row.qty)}</span>
+							{:else if row.qty < 0}
+								<span class="text-red-600">{formatJumlah(row.qty)}</span>
+							{:else}
+								<span class="text-slate-500">0</span>
+							{/if}
+						</TableCell>
+						<TableCell>
+							<Badge variant="secondary" class="font-mono text-xs text-slate-700 bg-slate-100">{row.trans_id}</Badge>
+						</TableCell>
+					</TableRow>
+				{/each}
+			{/if}
+		</TableBody>
+	</Table>
 </div>
-<p class="result-note">{selectedObat ? `Riwayat: ${selectedObat.obat_nama}` : 'Menampilkan riwayat terbaru. Ketik minimal 2 huruf untuk mencari obat.'}</p>
-{#if errorMessage}<div class="stock-error">Gagal memuat kartu stok: {errorMessage}</div>{/if}
-<div class="data-table-wrapper"><table class="data-table kartu-table"><thead><tr><th>Waktu</th><th>Obat</th><th>Jenis</th><th>Jumlah</th><th>ID Transaksi</th></tr></thead><tbody>
-{#if loading}<tr><td colspan="5" class="table-empty">Memuat riwayat...</td></tr>{:else if rows.length === 0}<tr><td colspan="5" class="table-empty">Belum ada riwayat kartu stok.</td></tr>{:else}{#each rows as row}<tr><td>{formatWaktu(row.tanggal_waktu)}</td><td><strong>{row.obat_nama}</strong><br /><small>{row.obat_id}</small></td><td><span class="mutation {jenisMutasi(row).toLowerCase().replace(' ', '-')}">{jenisMutasi(row)}</span></td><td class:inbound={row.qty > 0} class:outbound={row.qty < 0}><strong>{formatJumlah(row.qty)}</strong></td><td><code>{row.trans_id}</code></td></tr>{/each}{/if}
-</tbody></table></div>
-<style>
-.kartu-search { position: relative; flex: 1; max-width: 420px; }.kartu-search .search-box { max-width: none; }.search-results { position: absolute; top: 2.55rem; width: 100%; max-height: 250px; overflow-y: auto; z-index: 5; background: white; border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-md); }.search-results button { width: 100%; border: 0; background: white; text-align: left; padding: .55rem .75rem; cursor: pointer; display: flex; justify-content: space-between; gap: 1rem; }.search-results button:hover { background: var(--color-primary-50); }.search-results span, small { color: var(--color-text-muted); font-size: .78rem; }.filter-group { display: flex; gap: var(--space-sm); }.filter-group select { padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); font: inherit; }.kartu-table { min-width: 800px; }.mutation { border-radius: 999px; font-size: .78rem; font-weight: 600; padding: .2rem .55rem; }.masuk { background: var(--color-success-light); color: var(--color-success); }.keluar { background: var(--color-danger-light); color: var(--color-danger); }.stok-opname { background: var(--color-warning-light); color: #b45309; }.inbound { color: var(--color-success); }.outbound { color: var(--color-danger); }.stock-error { margin-bottom: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--color-danger-light); color: var(--color-danger); }.result-note { margin: calc(var(--space-md) * -1) 0 var(--space-md); color: var(--color-text-muted); font-size: .82rem; }@media (max-width: 600px) { .filter-group { width: 100%; } }
-</style>

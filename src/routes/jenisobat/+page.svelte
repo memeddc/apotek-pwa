@@ -2,33 +2,30 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import type { Ijenis_obat } from '$lib/db/types';
+	import { toast } from '$lib/components/ui/toast';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+	import { Sheet } from '$lib/components/ui/sheet';
+	import { AlertDialog } from '$lib/components/ui/alert-dialog';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Tag, Plus, Search, Edit2, Trash2, Save } from 'lucide-svelte';
 
 	let data = $state<Ijenis_obat[]>([]);
 	let filtered = $state<Ijenis_obat[]>([]);
 	let searchQuery = $state('');
 	let loading = $state(true);
 
-	// Modal state
-	let showModal = $state(false);
+	// Sheet state
+	let showSheet = $state(false);
 	let isEditing = $state(false);
 	let formData = $state<Ijenis_obat>({ jenis_id: '', jenis_nama: '' });
 	let saving = $state(false);
 
-	// Toast
-	let toastMsg = $state('');
-	let toastType = $state<'success' | 'error'>('success');
-	let toastTimer: ReturnType<typeof setTimeout>;
-
 	// Delete confirmation
 	let showDeleteConfirm = $state(false);
 	let deleteTarget = $state<Ijenis_obat | null>(null);
-
-	function showToast(msg: string, type: 'success' | 'error' = 'success') {
-		toastMsg = msg;
-		toastType = type;
-		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toastMsg = ''), 3000);
-	}
 
 	async function loadData() {
 		loading = true;
@@ -37,7 +34,7 @@
 			.select('*')
 			.order('jenis_id');
 		if (error) {
-			showToast('Gagal memuat data: ' + error.message, 'error');
+			toast.error('Gagal memuat data: ' + error.message);
 		} else {
 			data = result ?? [];
 		}
@@ -55,13 +52,13 @@
 	function openAdd() {
 		isEditing = false;
 		formData = { jenis_id: '', jenis_nama: '' };
-		showModal = true;
+		showSheet = true;
 	}
 
 	function openEdit(item: Ijenis_obat) {
 		isEditing = true;
 		formData = { ...item };
-		showModal = true;
+		showSheet = true;
 	}
 
 	function confirmDelete(item: Ijenis_obat) {
@@ -71,7 +68,7 @@
 
 	async function handleSave() {
 		if (!formData.jenis_id.trim() || !formData.jenis_nama.trim()) {
-			showToast('Semua field wajib diisi!', 'error');
+			toast.error('Semua field wajib diisi!');
 			return;
 		}
 		saving = true;
@@ -81,20 +78,20 @@
 				.update({ jenis_nama: formData.jenis_nama })
 				.eq('jenis_id', formData.jenis_id);
 			if (error) {
-				showToast('Gagal mengupdate: ' + error.message, 'error');
+				toast.error('Gagal mengupdate: ' + error.message);
 			} else {
-				showToast('Data berhasil diupdate');
+				toast.success('Data jenis obat berhasil diupdate');
 			}
 		} else {
 			const { error } = await supabase.from('jenis_obat').insert([formData]);
 			if (error) {
-				showToast('Gagal menyimpan: ' + error.message, 'error');
+				toast.error('Gagal menyimpan: ' + error.message);
 			} else {
-				showToast('Data berhasil ditambahkan');
+				toast.success('Data jenis obat berhasil ditambahkan');
 			}
 		}
 		saving = false;
-		showModal = false;
+		showSheet = false;
 		await loadData();
 	}
 
@@ -105,9 +102,9 @@
 			.delete()
 			.eq('jenis_id', deleteTarget.jenis_id);
 		if (error) {
-			showToast('Gagal menghapus: ' + error.message, 'error');
+			toast.error('Gagal menghapus: ' + error.message);
 		} else {
-			showToast('Data berhasil dihapus');
+			toast.success('Data jenis obat berhasil dihapus');
 		}
 		showDeleteConfirm = false;
 		deleteTarget = null;
@@ -122,108 +119,112 @@
 	onMount(loadData);
 </script>
 
-<div class="page-header">
-	<h1>🏷️ Master Jenis Obat</h1>
-	<p>Kelola kategori dan jenis obat</p>
-</div>
+<div class="space-y-6">
+	<!-- Page Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+		<div>
+			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+				<Tag class="w-6 h-6 text-teal-600" />
+				Master Jenis Obat
+			</h2>
+			<p class="text-xs text-slate-500 mt-1">Kelola kategori dan jenis obat yang tersedia</p>
+		</div>
 
-<div class="crud-toolbar">
-	<div class="search-box">
-		<span class="search-icon">🔍</span>
-		<input type="text" placeholder="Cari jenis obat..." bind:value={searchQuery} />
+		<Button onclick={openAdd}>
+			<Plus class="w-4 h-4 mr-2" /> Tambah Jenis
+		</Button>
 	</div>
-	<button class="btn btn-primary" onclick={openAdd}>+ Tambah Jenis</button>
-</div>
 
-<div class="data-table-wrapper">
-	<table class="data-table">
-		<thead>
-			<tr>
-				<th style="width: 120px;">Kode</th>
-				<th>Nama Jenis Obat</th>
-				<th style="width: 100px;">Aksi</th>
-			</tr>
-		</thead>
-		<tbody>
+	<!-- Toolbar & Search -->
+	<div class="flex items-center justify-between gap-4 max-w-sm">
+		<div class="relative w-full">
+			<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+			<Input
+				type="text"
+				placeholder="Cari jenis obat..."
+				bind:value={searchQuery}
+				class="pl-9"
+			/>
+		</div>
+	</div>
+
+	<!-- Data Table -->
+	<Table>
+		<TableHeader>
+			<TableRow>
+				<TableHead class="w-32">Kode</TableHead>
+				<TableHead>Nama Jenis Obat</TableHead>
+				<TableHead class="w-24 text-right">Aksi</TableHead>
+			</TableRow>
+		</TableHeader>
+		<TableBody>
 			{#if loading}
-				<tr>
-					<td colspan="3" class="table-empty">
-						<div>Memuat data...</div>
-					</td>
-				</tr>
+				{#each Array(5) as _}
+					<TableRow>
+						<TableCell><Skeleton class="h-5 w-16" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-48" /></TableCell>
+						<TableCell><Skeleton class="h-5 w-16 ml-auto" /></TableCell>
+					</TableRow>
+				{/each}
 			{:else if filtered.length === 0}
-				<tr>
-					<td colspan="3" class="table-empty">
-						<div class="empty-icon">📭</div>
-						<div>Tidak ada data ditemukan</div>
-					</td>
-				</tr>
+				<TableRow>
+					<TableCell colspan={3} class="text-center py-8 text-slate-400 text-xs">
+						Tidak ada jenis obat ditemukan.
+					</TableCell>
+				</TableRow>
 			{:else}
 				{#each filtered as item}
-					<tr>
-						<td><code style="background: var(--color-primary-50); padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; color: var(--color-primary-dark);">{item.jenis_id}</code></td>
-						<td>{item.jenis_nama}</td>
-						<td>
-							<div class="table-actions">
-								<button class="btn btn-ghost btn-sm" title="Edit" onclick={() => openEdit(item)}>✏️</button>
-								<button class="btn btn-danger-ghost btn-sm" title="Hapus" onclick={() => confirmDelete(item)}>🗑️</button>
+					<TableRow>
+						<TableCell>
+							<Badge variant="secondary" class="font-mono text-xs">{item.jenis_id}</Badge>
+						</TableCell>
+						<TableCell class="font-medium text-slate-900 text-xs">{item.jenis_nama}</TableCell>
+						<TableCell class="text-right">
+							<div class="flex items-center justify-end gap-1">
+								<Button variant="ghost" size="icon" class="h-8 w-8 text-slate-600 hover:text-teal-600" onclick={() => openEdit(item)}>
+									<Edit2 class="w-3.5 h-3.5" />
+								</Button>
+								<Button variant="ghost" size="icon" class="h-8 w-8 text-slate-400 hover:text-red-600" onclick={() => confirmDelete(item)}>
+									<Trash2 class="w-3.5 h-3.5" />
+								</Button>
 							</div>
-						</td>
-					</tr>
+						</TableCell>
+					</TableRow>
 				{/each}
 			{/if}
-		</tbody>
-	</table>
+		</TableBody>
+	</Table>
 </div>
 
-<!-- Add/Edit Modal -->
-{#if showModal}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={() => (showModal = false)}>
-		<div class="modal-box" onclick={(e) => e.stopPropagation()}>
-			<h2>{isEditing ? 'Edit Jenis Obat' : 'Tambah Jenis Obat'}</h2>
-			<div class="form-group">
-				<label for="jenis_id">Kode Jenis</label>
-				<input id="jenis_id" type="text" bind:value={formData.jenis_id} disabled={isEditing} placeholder="Contoh: JO01" />
-			</div>
-			<div class="form-group">
-				<label for="jenis_nama">Nama Jenis Obat</label>
-				<input id="jenis_nama" type="text" bind:value={formData.jenis_nama} placeholder="Contoh: Tablet" />
-			</div>
-			<div class="modal-footer">
-				<button class="btn btn-ghost" onclick={() => (showModal = false)}>Batal</button>
-				<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
-					{saving ? 'Menyimpan...' : 'Simpan'}
-				</button>
-			</div>
+<!-- Slide-in Sheet Panel Form -->
+<Sheet
+	bind:open={showSheet}
+	title={isEditing ? 'Edit Jenis Obat' : 'Tambah Jenis Obat'}
+	description="Isi rincian kode dan nama jenis obat."
+>
+	<div class="space-y-4 pt-2">
+		<div class="space-y-1.5">
+			<label for="jenis_id" class="text-xs font-semibold text-slate-700">Kode Jenis</label>
+			<Input id="jenis_id" type="text" bind:value={formData.jenis_id} disabled={isEditing} placeholder="Contoh: JO01" />
+		</div>
+		<div class="space-y-1.5">
+			<label for="jenis_nama" class="text-xs font-semibold text-slate-700">Nama Jenis Obat</label>
+			<Input id="jenis_nama" type="text" bind:value={formData.jenis_nama} placeholder="Contoh: Tablet" />
 		</div>
 	</div>
-{/if}
 
-<!-- Delete Confirmation Modal -->
-{#if showDeleteConfirm}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="modal-overlay" onclick={() => (showDeleteConfirm = false)}>
-		<div class="modal-box" onclick={(e) => e.stopPropagation()}>
-			<h2>Konfirmasi Hapus</h2>
-			<p style="color: var(--color-text-secondary); line-height: 1.6;">
-				Apakah Anda yakin ingin menghapus jenis obat
-				<strong>"{deleteTarget?.jenis_nama}"</strong>?
-				Tindakan ini tidak dapat dibatalkan.
-			</p>
-			<div class="modal-footer">
-				<button class="btn btn-ghost" onclick={() => (showDeleteConfirm = false)}>Batal</button>
-				<button class="btn" style="background: var(--color-danger); color: white;" onclick={handleDelete}>Hapus</button>
-			</div>
-		</div>
-	</div>
-{/if}
+	{#snippet footer()}
+		<Button variant="outline" size="sm" onclick={() => (showSheet = false)}>Batal</Button>
+		<Button size="sm" onclick={handleSave} disabled={saving}>
+			{#if saving}Menyimpan...{:else}<Save class="w-3.5 h-3.5 mr-1" /> Simpan{/if}
+		</Button>
+	{/snippet}
+</Sheet>
 
-<!-- Toast -->
-{#if toastMsg}
-	<div class="toast {toastType === 'success' ? 'toast-success' : 'toast-error'}">
-		{toastMsg}
-	</div>
-{/if}
+<!-- AlertDialog Delete -->
+<AlertDialog
+	bind:open={showDeleteConfirm}
+	title="Hapus Jenis Obat"
+	description={`Apakah Anda yakin ingin menghapus jenis obat "${deleteTarget?.jenis_nama}"?`}
+	onConfirm={handleDelete}
+/>
