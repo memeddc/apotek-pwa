@@ -55,6 +55,12 @@
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 	}
 
+	function daysAgoStr(days: number): string {
+		const d = new Date();
+		d.setDate(d.getDate() - days);
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+	}
+
 	function tomorrowOf(dateStr: string): string {
 		const d = new Date(`${dateStr}T00:00:00`);
 		d.setDate(d.getDate() + 1);
@@ -159,7 +165,7 @@
 	}
 
 	onMount(() => {
-		dateFrom = todayStr();
+		dateFrom = daysAgoStr(7);
 		dateTo = todayStr();
 		loadTransactions();
 	});
