@@ -9,12 +9,13 @@ body {
   color: #0f172a;
 }
 
-/* Print Styles for Thermal Receipts */
+/* Print Styles for Receipts and Reports */
 @media print {
   body * {
     visibility: hidden;
   }
-  #printable-receipt, #printable-receipt * {
+  #printable-receipt, #printable-receipt *,
+  #printable-report, #printable-report * {
     visibility: visible;
   }
   #printable-receipt {
@@ -26,6 +27,15 @@ body {
     font-family: 'Courier New', Courier, monospace;
     font-size: 11px;
     line-height: 1.3;
+    background: #fff;
+    color: #000;
+  }
+  #printable-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 8mm;
     background: #fff;
     color: #000;
   }

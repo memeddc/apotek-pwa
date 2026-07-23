@@ -466,7 +466,11 @@
 	}
 
 	function downloadPDF() {
-		window.print();
+		if (allSales.length === 0 && allPurchases.length === 0) {
+			toast.error('Tidak ada data laporan untuk dicetak/diunduh.');
+			return;
+		}
+		setTimeout(() => window.print(), 100);
 	}
 
 	function downloadExcel() {
@@ -1081,10 +1085,7 @@
 <!-- Print Layout (@media print) -->
 <div id="printable-report" class="hidden print:block text-slate-900 font-sans p-4 space-y-4">
 	<div class="text-center border-b pb-3 mb-4">
-		<h1 class="text-xl font-bold">APOTEK PWA</h1>
-		<h2 class="text-sm font-semibold text-slate-700">
-			LAPORAN TRANSAKSI & KEUANGAN APOTEK
-		</h2>
+		<h1 class="text-xl font-bold">LAPORAN TRANSAKSI & KEUANGAN APOTEK</h1>
 		<p class="text-xs text-slate-500">
 			Periode: {formatTanggalIndo(dateFrom)} s/d {formatTanggalIndo(dateTo)}
 			{#if isPerHari}
@@ -1123,15 +1124,21 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each getObatTerjualSummary() as row, idx}
+				{#if getObatTerjualSummary().length === 0}
 					<tr>
-						<td class="border p-1 text-center font-mono">{idx + 1}</td>
-						<td class="border p-1 font-mono">{row.obat_id}</td>
-						<td class="border p-1 font-semibold">{row.obat_nama}</td>
-						<td class="border p-1 text-center">{row.total_qty}</td>
-						<td class="border p-1 text-right font-mono font-bold">Rp{formatRp(row.total_rp)}</td>
+						<td colspan="5" class="border p-2 text-center text-slate-400 italic">Tidak ada data penjualan obat.</td>
 					</tr>
-				{/each}
+				{:else}
+					{#each getObatTerjualSummary() as row, idx}
+						<tr>
+							<td class="border p-1 text-center font-mono">{idx + 1}</td>
+							<td class="border p-1 font-mono">{row.obat_id}</td>
+							<td class="border p-1 font-semibold">{row.obat_nama}</td>
+							<td class="border p-1 text-center">{row.total_qty}</td>
+							<td class="border p-1 text-right font-mono font-bold">Rp{formatRp(row.total_rp)}</td>
+						</tr>
+					{/each}
+				{/if}
 			</tbody>
 		</table>
 	</div>
@@ -1151,16 +1158,22 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each getObatDibeliSummary() as row, idx}
+				{#if getObatDibeliSummary().length === 0}
 					<tr>
-						<td class="border p-1 text-center font-mono">{idx + 1}</td>
-						<td class="border p-1 font-mono">{row.obat_id}</td>
-						<td class="border p-1 font-semibold">{row.obat_nama}</td>
-						<td class="border p-1">{row.pbf_nama}</td>
-						<td class="border p-1 text-center">+{row.total_qty}</td>
-						<td class="border p-1 text-right font-mono font-bold">Rp{formatRp(row.total_rp)}</td>
+						<td colspan="6" class="border p-2 text-center text-slate-400 italic">Tidak ada data pembelian obat.</td>
 					</tr>
-				{/each}
+				{:else}
+					{#each getObatDibeliSummary() as row, idx}
+						<tr>
+							<td class="border p-1 text-center font-mono">{idx + 1}</td>
+							<td class="border p-1 font-mono">{row.obat_id}</td>
+							<td class="border p-1 font-semibold">{row.obat_nama}</td>
+							<td class="border p-1">{row.pbf_nama}</td>
+							<td class="border p-1 text-center">+{row.total_qty}</td>
+							<td class="border p-1 text-right font-mono font-bold">Rp{formatRp(row.total_rp)}</td>
+						</tr>
+					{/each}
+				{/if}
 			</tbody>
 		</table>
 	</div>
