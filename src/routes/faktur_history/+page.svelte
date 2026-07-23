@@ -8,37 +8,39 @@
 	import { Card, CardHeader, CardTitle, CardContent } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Receipt, Search, Printer, ShoppingCart } from 'lucide-svelte';
+	import { FileText, Search, Printer, Package, Building2 } from 'lucide-svelte';
 
-	type TransDetail = {
+	type PurchaseDetail = {
 		obat_id: string;
 		qty: number;
-		harga_obat: number;
+		total_per_obat: number;
+		harga_satuan: number;
 		disc: number;
+		disc_rp: number;
 		total_line: number;
 		obat_nama: string;
 		jenis_nama: string;
 	};
 
-	type TransRecord = {
+	type PurchaseRecord = {
 		trans_id: string;
+		pbf_id: string;
+		pbf_nama: string;
 		tanggal_waktu: string;
 		total_trans: number;
 		total_disc: number;
-		bayar: number;
-		kembali: number;
-		details: TransDetail[];
+		details: PurchaseDetail[];
 	};
 
 	let loading = $state(false);
-	let transactions = $state<TransRecord[]>([]);
+	let purchases = $state<PurchaseRecord[]>([]);
 	let dateFrom = $state('');
 	let dateTo = $state('');
 	let obatQuery = $state('');
-	let selectedTrans = $state<TransRecord | null>(null);
+	let selectedRecord = $state<PurchaseRecord | null>(null);
 
 	function formatRp(v: number): string {
-		return new Intl.NumberFormat('id-ID').format(Math.round(v));
+		return new Intl.NumberFormat('id-ID').format(Math.round(v || 0));
 	}
 
 	function formatTanggal(dt: string): string {
@@ -78,47 +80,17 @@
 			const parsed = new Date(dtString);
 			if (!isNaN(parsed.getTime())) return parsed.toISOString();
 		}
-		const cleanId = transId.replace(/^J/, '');
-		if (/^\d{8}/.test(cleanId)) {
-			const y = cleanId.slice(0, 4);
-			const m = cleanId.slice(4, 6);
-			const d = cleanId.slice(6, 8);
+		if (/^\d{8}/.test(transId)) {
+			const y = transId.slice(0, 4);
+			const m = transId.slice(4, 6);
+			const d = transId.slice(6, 8);
 			return `${y}-${m}-${d}T00:00:00+07:00`;
 		}
 		return new Date().toISOString();
 	}
 
-	function parseDetailItem(
-		d: { trans_id: string; obat_id: string; qty: number; harga_obat?: number },
-		transTotal: number,
-		rawGroup: any[]
-	) {
-		const qty = d.qty || 1;
-		const val = Number(d.harga_obat) || 0;
-		const sumLine = rawGroup.reduce((s, item) => s + (Number(item.harga_obat) || 0), 0);
-		const sumUnit = rawGroup.reduce((s, item) => s + ((Number(item.harga_obat) || 0) * (item.qty || 1)), 0);
-
-		let unitPrice = 0;
-		if (Math.abs(sumUnit - transTotal) < Math.abs(sumLine - transTotal)) {
-			unitPrice = val;
-		} else {
-			unitPrice = qty > 0 ? val / qty : 0;
-		}
-
-		const total_line = Math.round(qty * unitPrice);
-
-		return {
-			trans_id: d.trans_id,
-			obat_id: d.obat_id,
-			qty,
-			harga_obat: Math.round(unitPrice),
-			disc: 0,
-			total_line
-		};
-	}
-
 	/**
-	 * Helper function to chunk array and query Supabase using .in() to avoid URL length limit errors.
+	 * Chunked fetch helper to query Supabase REST API safely without hitting GET URL length limits.
 	 */
 	async function fetchInChunks<T>(
 		tableName: string,
@@ -144,40 +116,41 @@
 		return results;
 	}
 
-	async function loadTransactions() {
+	async function loadPurchases() {
 		if (!dateFrom || !dateTo) return;
 		loading = true;
 
 		const startDt = `${dateFrom}T00:00:00+07:00`;
 		const endDt = `${tomorrowOf(dateTo)}T00:00:00+07:00`;
+		const dateFromPrefix = dateFrom.replaceAll('-', '');
+		const dateToNextPrefix = tomorrowOf(dateTo).replaceAll('-', '');
 
-		const { data: sales, error: salesError } = await supabase
-			.from('penjualan')
-			.select('*')
-			.gte('tanggal_waktu', startDt)
-			.lt('tanggal_waktu', endDt)
-			.order('tanggal_waktu', { ascending: false });
+		const { data: purchaseData, error: purchaseError } = await supabase
+			.from('purchase')
+			.select('*, pbf(pbf_nama)')
+			.or(`and(tanggal_waktu.gte.${startDt},tanggal_waktu.lt.${endDt}),and(trans_id.gte.${dateFromPrefix},trans_id.lt.${dateToNextPrefix})`)
+			.order('trans_id', { ascending: false });
 
-		if (salesError) {
-			toast.error(`Gagal memuat data penjualan: ${salesError.message}`);
+		if (purchaseError) {
+			toast.error(`Gagal memuat riwayat pembelian: ${purchaseError.message}`);
 			loading = false;
 			return;
 		}
 
-		const salesList = sales ?? [];
-		const salesTransIds = salesList.map((s) => s.trans_id);
+		const purchaseList = purchaseData ?? [];
+		const purchaseTransIds = purchaseList.map((p) => p.trans_id);
 
-		if (salesTransIds.length === 0) {
-			transactions = [];
+		if (purchaseTransIds.length === 0) {
+			purchases = [];
 			loading = false;
 			return;
 		}
 
-		// Fetch details in batches of 50 to prevent URL parameter overflow
-		const dpList = await fetchInChunks<any>('detail_penjualan', '*', 'trans_id', salesTransIds, 50);
+		// Fetch detail_purchase in batches of 50
+		const dpurList = await fetchInChunks<any>('detail_purchase', '*', 'trans_id', purchaseTransIds, 50);
 
 		// Extract unique obat_ids and fetch obat details in batches of 50
-		const obatIds = [...new Set(dpList.map((d) => d.obat_id))];
+		const obatIds = [...new Set(dpurList.map((d) => d.obat_id))];
 		const obatData = await fetchInChunks<any>(
 			'obat',
 			'obat_id, obat_nama, jenis_id, jenis_obat(jenis_nama)',
@@ -194,58 +167,75 @@
 			});
 		});
 
-		transactions = salesList.map((s) => {
-			const rawItems = dpList.filter((d) => d.trans_id === s.trans_id);
+		purchases = purchaseList.map((p) => {
+			const rawItems = dpurList.filter((d) => d.trans_id === p.trans_id);
 
-			const itemDetails: TransDetail[] = rawItems.map((d) => {
-				const parsed = parseDetailItem(d, s.total_trans, rawItems);
+			const details: PurchaseDetail[] = rawItems.map((d) => {
+				const qty = Number(d.qty) || 1;
+				const totalPerObat = Number(d.total_per_obat) || 0;
+				const disc = Number(d.disc) || 0;
+
+				// Calculation rule: Total_per_obat is NOT multiplied by qty.
+				// Total line = total_per_obat minus discount (disc % or nominal).
+				const discRp = disc > 0 ? (disc <= 100 ? (totalPerObat * disc) / 100 : disc) : 0;
+				const total_line = Math.max(0, Math.round(totalPerObat - discRp));
+				const hargaSatuan = qty > 0 ? Math.round(totalPerObat / qty) : totalPerObat;
+
 				const oInfo = obatMap.get(d.obat_id);
+
 				return {
-					...parsed,
+					obat_id: d.obat_id,
+					qty,
+					total_per_obat: totalPerObat,
+					harga_satuan: hargaSatuan,
+					disc,
+					disc_rp: Math.round(discRp),
+					total_line,
 					obat_nama: oInfo?.obat_nama ?? d.obat_id,
 					jenis_nama: oInfo?.jenis_nama ?? '-'
 				};
 			});
 
 			return {
-				trans_id: s.trans_id,
-				tanggal_waktu: parseTransDate(s.trans_id, s.tanggal_waktu),
-				total_trans: Number(s.total_trans) || 0,
-				total_disc: Number(s.total_disc) || 0,
-				bayar: Number(s.bayar) || Number(s.total_trans) || 0,
-				kembali: Number(s.kembali) || 0,
-				details: itemDetails
+				trans_id: p.trans_id,
+				pbf_id: p.pbf_id,
+				pbf_nama: p.pbf?.pbf_nama ?? p.pbf_id ?? 'PBF',
+				tanggal_waktu: parseTransDate(p.trans_id, p.tanggal_waktu),
+				total_trans: Number(p.total_trans) || 0,
+				total_disc: Number(p.total_disc) || 0,
+				details
 			};
 		});
 
 		loading = false;
 	}
 
-	function getFilteredTransactions(): TransRecord[] {
+	function getFilteredPurchases(): PurchaseRecord[] {
 		const q = obatQuery.trim().toLowerCase();
-		if (!q) return transactions;
-		return transactions.filter((t) => {
-			const matchTransId = t.trans_id.toLowerCase().includes(q);
-			const matchObat = t.details.some(
+		if (!q) return purchases;
+		return purchases.filter((p) => {
+			const matchTransId = p.trans_id.toLowerCase().includes(q);
+			const matchPbf = p.pbf_nama.toLowerCase().includes(q) || p.pbf_id.toLowerCase().includes(q);
+			const matchObat = p.details.some(
 				(d) => d.obat_nama.toLowerCase().includes(q) || d.obat_id.toLowerCase().includes(q)
 			);
-			return matchTransId || matchObat;
+			return matchTransId || matchPbf || matchObat;
 		});
 	}
 
-	function subtotalBeforeDisc(trans: TransRecord): number {
-		return trans.details.reduce((s, d) => s + d.qty * d.harga_obat, 0);
+	function subtotalKotor(record: PurchaseRecord): number {
+		return record.details.reduce((s, d) => s + d.total_per_obat, 0);
 	}
 
-	function openPrint(trans: TransRecord) {
-		selectedTrans = trans;
+	function openPrint(record: PurchaseRecord) {
+		selectedRecord = record;
 		setTimeout(() => window.print(), 300);
 	}
 
 	onMount(() => {
-		dateFrom = daysAgoStr(7);
+		dateFrom = daysAgoStr(30);
 		dateTo = todayStr();
-		loadTransactions();
+		loadPurchases();
 	});
 </script>
 
@@ -254,10 +244,10 @@
 	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
 		<div>
 			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<Receipt class="w-6 h-6 text-teal-600" />
-				Cetak Nota Penjualan
+				<FileText class="w-6 h-6 text-purple-600" />
+				Faktur History
 			</h2>
-			<p class="text-xs text-slate-500 mt-1">Cari dan cetak ulang nota riwayat penjualan kasir</p>
+			<p class="text-xs text-slate-500 mt-1">Riwayat histori transaksi faktur pembelian obat dari PBF/Supplier</p>
 		</div>
 	</div>
 
@@ -265,9 +255,9 @@
 	<Card class="border-slate-200 shadow-sm print:hidden">
 		<CardContent class="pt-6">
 			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
-				<!-- Date From -->
+				<!-- Begda (Dari Tanggal) -->
 				<div class="lg:col-span-3 space-y-1">
-					<label for="date-from" class="text-xs font-semibold text-slate-600">Dari Tanggal</label>
+					<label for="date-from" class="text-xs font-semibold text-slate-600">Dari Tanggal (Begda)</label>
 					<Input
 						id="date-from"
 						type="date"
@@ -278,9 +268,9 @@
 					/>
 				</div>
 
-				<!-- Date To -->
+				<!-- Endda (Sampai Tanggal) -->
 				<div class="lg:col-span-3 space-y-1">
-					<label for="date-to" class="text-xs font-semibold text-slate-600">Sampai Tanggal</label>
+					<label for="date-to" class="text-xs font-semibold text-slate-600">Sampai Tanggal (Endda)</label>
 					<Input
 						id="date-to"
 						type="date"
@@ -293,7 +283,7 @@
 
 				<!-- Search Input -->
 				<div class="lg:col-span-6 space-y-1 relative">
-					<label for="obat-filter" class="text-xs font-semibold text-slate-600">Cari Nama Obat / No. Nota</label>
+					<label for="obat-filter" class="text-xs font-semibold text-slate-600">Cari Obat / No. Faktur / PBF</label>
 					<div class="flex gap-2">
 						<div class="relative flex-1">
 							<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
@@ -301,11 +291,11 @@
 								id="obat-filter"
 								type="text"
 								bind:value={obatQuery}
-								placeholder="Ketik nama obat atau nomor nota..."
+								placeholder="Ketik nama obat, supplier PBF, atau nomor faktur..."
 								class="pl-9 text-xs"
 							/>
 						</div>
-						<Button size="sm" onclick={loadTransactions} disabled={loading}>
+						<Button size="sm" onclick={loadPurchases} disabled={loading}>
 							{loading ? '...' : 'Cari'}
 						</Button>
 					</div>
@@ -317,40 +307,45 @@
 	<!-- Results List -->
 	<div class="space-y-4 print:hidden">
 		<h3 class="text-sm font-semibold text-slate-700">
-			Daftar Penjualan Ditemukan ({getFilteredTransactions().length})
+			Daftar Pembelian Faktur Ditemukan ({getFilteredPurchases().length})
 		</h3>
 
 		{#if loading}
 			<div class="space-y-3">
 				{#each Array(3) as _}
-					<Skeleton class="h-24 w-full rounded-xl" />
+					<Skeleton class="h-28 w-full rounded-xl" />
 				{/each}
 			</div>
-		{:else if getFilteredTransactions().length === 0}
+		{:else if getFilteredPurchases().length === 0}
 			<Card class="border-slate-200">
 				<CardContent class="py-12 text-center text-xs text-slate-400">
-					Tidak ada data penjualan ditemukan untuk rentang tanggal dan pencarian ini.
+					Tidak ada data faktur pembelian ditemukan untuk periode dan kriteria pencarian ini.
 				</CardContent>
 			</Card>
 		{:else}
 			<div class="space-y-4">
-				{#each getFilteredTransactions() as trans}
-					<Card class="border-slate-200 shadow-xs hover:border-teal-400 transition-colors">
+				{#each getFilteredPurchases() as record}
+					<Card class="border-slate-200 shadow-xs hover:border-purple-400 transition-colors">
 						<CardHeader class="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-							<div class="flex items-center gap-3">
-								<Badge variant="secondary" class="font-mono text-xs font-bold text-slate-800">{trans.trans_id}</Badge>
-								<Badge variant="success" class="text-[10px] inline-flex items-center gap-1">
-									<ShoppingCart class="w-3 h-3" /> Penjualan
+							<div class="flex flex-wrap items-center gap-3">
+								<Badge variant="secondary" class="font-mono text-xs font-bold text-slate-800">{record.trans_id}</Badge>
+
+								<Badge variant="secondary" class="text-[11px] text-purple-800 bg-purple-50 border-purple-200 inline-flex items-center gap-1">
+									<Building2 class="w-3 h-3" /> {record.pbf_nama}
 								</Badge>
+
 								<span class="text-xs text-slate-400">
-									{formatTanggal(trans.tanggal_waktu)} {formatWaktu(trans.tanggal_waktu)}
+									{formatTanggal(record.tanggal_waktu)} {formatWaktu(record.tanggal_waktu)}
 								</span>
 							</div>
 
 							<div class="flex items-center gap-3">
-								<span class="text-sm font-bold text-teal-700">Rp{formatRp(trans.total_trans)}</span>
-								<Button size="sm" variant="outline" class="h-8 text-xs" onclick={() => openPrint(trans)}>
-									<Printer class="w-3.5 h-3.5 mr-1" /> Cetak Nota
+								<div class="text-right">
+									<span class="text-xs text-slate-400 block">Total Faktur</span>
+									<span class="text-sm font-bold text-purple-700">Rp{formatRp(record.total_trans)}</span>
+								</div>
+								<Button size="sm" variant="outline" class="h-8 text-xs" onclick={() => openPrint(record)}>
+									<Printer class="w-3.5 h-3.5 mr-1" /> Cetak Bukti
 								</Button>
 							</div>
 						</CardHeader>
@@ -361,29 +356,37 @@
 									<TableRow>
 										<TableHead>Nama Obat</TableHead>
 										<TableHead>Jenis</TableHead>
-										<TableHead class="text-center">Qty</TableHead>
-										<TableHead class="text-right">Harga Satuan</TableHead>
-										<TableHead class="text-right">Subtotal</TableHead>
+										<TableHead class="text-center">Qty Masuk</TableHead>
+										<TableHead class="text-right">Harga Total Per Obat</TableHead>
+										<TableHead class="text-center">Diskon</TableHead>
+										<TableHead class="text-right">Total Bersih</TableHead>
 									</TableRow>
 								</TableHeader>
 								<TableBody>
-									{#if trans.details.length === 0}
+									{#if record.details.length === 0}
 										<TableRow>
-											<TableCell colspan={5} class="text-center text-xs text-slate-400 py-4">
-												Tidak ada detail item obat tercatat untuk nota ini.
+											<TableCell colspan={6} class="text-center text-xs text-slate-400 py-4">
+												Tidak ada rincian item obat tercatat untuk faktur ini.
 											</TableCell>
 										</TableRow>
 									{:else}
-										{#each trans.details as d}
+										{#each record.details as d}
 											<TableRow>
 												<TableCell class="font-semibold text-slate-900 text-xs">
 													{d.obat_nama}
 													<span class="block text-[10px] text-slate-400 font-mono font-normal">{d.obat_id}</span>
 												</TableCell>
 												<TableCell><Badge variant="outline" class="text-[10px]">{d.jenis_nama}</Badge></TableCell>
-												<TableCell class="text-center text-xs font-bold">{d.qty}</TableCell>
-												<TableCell class="text-right text-xs">Rp{formatRp(d.harga_obat)}</TableCell>
-												<TableCell class="text-right font-bold text-xs text-teal-700">Rp{formatRp(d.total_line)}</TableCell>
+												<TableCell class="text-center text-xs font-bold text-emerald-700">+{d.qty}</TableCell>
+												<TableCell class="text-right text-xs font-mono">Rp{formatRp(d.total_per_obat)}</TableCell>
+												<TableCell class="text-center text-xs">
+													{#if d.disc > 0}
+														<span class="text-amber-700 font-medium">-{d.disc}% (Rp{formatRp(d.disc_rp)})</span>
+													{:else}
+														<span class="text-slate-400">-</span>
+													{/if}
+												</TableCell>
+												<TableCell class="text-right font-bold text-xs text-purple-700 font-mono">Rp{formatRp(d.total_line)}</TableCell>
 											</TableRow>
 										{/each}
 									{/if}
@@ -397,31 +400,32 @@
 	</div>
 </div>
 
-<!-- Print View Layout for Nota Receipt -->
-{#if selectedTrans}
+<!-- Print View Layout for Purchase Receipt -->
+{#if selectedRecord}
 	<div id="printable-receipt" class="hidden print:block">
 		<div style="text-align: center; margin-bottom: 8px;">
 			<h3 style="font-size: 14px; font-weight: bold; margin: 0;">APOTEK PWA</h3>
-			<p style="font-size: 10px; margin: 2px 0;">NOTA PENJUALAN</p>
+			<p style="font-size: 10px; margin: 2px 0;">BUKTI HISTORI FAKTUR PEMBELIAN</p>
 			<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
 		</div>
 
 		<div style="font-size: 10px; margin-bottom: 6px;">
-			<div>No. Nota : {selectedTrans.trans_id}</div>
-			<div>Tgl      : {formatTanggal(selectedTrans.tanggal_waktu)} {formatWaktu(selectedTrans.tanggal_waktu)}</div>
+			<div>No. Faktur : {selectedRecord.trans_id}</div>
+			<div>Supplier   : {selectedRecord.pbf_nama}</div>
+			<div>Tgl        : {formatTanggal(selectedRecord.tanggal_waktu)} {formatWaktu(selectedRecord.tanggal_waktu)}</div>
 		</div>
 
 		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
 
 		<table style="width: 100%; font-size: 10px; text-align: left; border-collapse: collapse;">
 			<tbody>
-				{#each selectedTrans.details as d}
+				{#each selectedRecord.details as d}
 					<tr>
-						<td colspan="3" style="font-weight: bold; padding-top: 2px;">{d.obat_nama}</td>
+						<td colspan="3" style="font-weight: bold; padding-top: 2px;">{d.obat_nama} ({d.qty} item)</td>
 					</tr>
 					<tr>
-						<td style="width: 30%;">{d.qty} x Rp{formatRp(d.harga_obat)}</td>
-						<td style="text-align: right;" colspan="2">Rp{formatRp(d.total_line)}</td>
+						<td style="width: 40%;">Subtotal: Rp{formatRp(d.total_per_obat)}</td>
+						<td style="text-align: right;" colspan="2">Net: Rp{formatRp(d.total_line)}</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -431,33 +435,25 @@
 
 		<div style="font-size: 10px; line-height: 1.4;">
 			<div style="display: flex; justify-content: space-between;">
-				<span>Subtotal:</span>
-				<span>Rp{formatRp(subtotalBeforeDisc(selectedTrans))}</span>
+				<span>Total Kotor:</span>
+				<span>Rp{formatRp(subtotalKotor(selectedRecord))}</span>
 			</div>
-			{#if selectedTrans.total_disc > 0}
+			{#if selectedRecord.total_disc > 0}
 				<div style="display: flex; justify-content: space-between;">
-					<span>Diskon:</span>
-					<span>-Rp{formatRp(selectedTrans.total_disc)}</span>
+					<span>Total Diskon PBF:</span>
+					<span>-Rp{formatRp(selectedRecord.total_disc)}</span>
 				</div>
 			{/if}
 			<div style="display: flex; justify-content: space-between; font-weight: bold;">
-				<span>TOTAL:</span>
-				<span>Rp{formatRp(selectedTrans.total_trans)}</span>
-			</div>
-			<div style="display: flex; justify-content: space-between;">
-				<span>Bayar:</span>
-				<span>Rp{formatRp(selectedTrans.bayar)}</span>
-			</div>
-			<div style="display: flex; justify-content: space-between;">
-				<span>Kembali:</span>
-				<span>Rp{formatRp(selectedTrans.kembali)}</span>
+				<span>TOTAL FAKTUR:</span>
+				<span>Rp{formatRp(selectedRecord.total_trans)}</span>
 			</div>
 		</div>
 
 		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
 
 		<div style="text-align: center; font-size: 9px; margin-top: 8px;">
-			<p>Terima Kasih Semoga Lekas Sembuh</p>
+			<p>Dokumen Historis Pembelian Apotek PWA</p>
 		</div>
 	</div>
 {/if}

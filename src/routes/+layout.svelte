@@ -23,7 +23,8 @@
 		ChevronLeft,
 		ChevronRight,
 		Search,
-		MoreHorizontal
+		MoreHorizontal,
+		BarChart3
 	} from 'lucide-svelte';
 
 	let { children } = $props();
@@ -36,13 +37,13 @@
 		{ href: '/', label: 'Dashboard', icon: LayoutDashboard, primaryMobile: true },
 		{ href: '/penjualan', label: 'Penjualan', icon: ShoppingCart, primaryMobile: true },
 		{ href: '/resep', label: 'Resep Dokter', icon: ClipboardList, primaryMobile: true },
-		{ href: '/stok', label: 'Stok', icon: Package, primaryMobile: true },
+		{ href: '/obat', label: 'Data & Stok Obat', icon: Pill, primaryMobile: true },
+		{ href: '/laporan', label: 'Laporan', icon: BarChart3, primaryMobile: true },
 		{ href: '/cetak_nota', label: 'Cetak Nota', icon: Receipt, primaryMobile: false },
-		{ href: '/faktur', label: 'Faktur', icon: FileSpreadsheet, primaryMobile: false },
+		{ href: '/faktur', label: 'Input Faktur', icon: FileSpreadsheet, primaryMobile: false },
+		{ href: '/faktur_history', label: 'Faktur History', icon: History, primaryMobile: false },
 		{ href: '/kartu_stok', label: 'Kartu Stok', icon: History, primaryMobile: false },
-		{ href: '/rubah_harga', label: 'Rubah Harga', icon: DollarSign, primaryMobile: false },
 		{ href: '/jenisobat', label: 'Jenis Obat', icon: Tag, primaryMobile: false },
-		{ href: '/obat', label: 'Obat', icon: Pill, primaryMobile: false },
 		{ href: '/pbf', label: 'PBF / Supplier', icon: Building2, primaryMobile: false }
 	];
 

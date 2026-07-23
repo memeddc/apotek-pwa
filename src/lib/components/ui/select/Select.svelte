@@ -23,7 +23,7 @@
 		value = $bindable(''),
 		onValueChange,
 		placeholder = 'Select...',
-		options,
+		options = [],
 		class: className = '',
 		id,
 		disabled = false
@@ -33,6 +33,12 @@
 		value = newValue;
 		onValueChange?.(newValue);
 	}
+
+	let selectedLabel = $derived.by(() => {
+		const valStr = String(value ?? '');
+		const found = (options || []).find((o) => String(o.value) === valStr);
+		return found ? found.label : valStr;
+	});
 </script>
 
 <Select.Root type="single" bind:value onValueChange={handleValueChange} {disabled}>
@@ -46,7 +52,9 @@
 		)}
 	>
 		{#snippet children()}
-			<Select.Value {placeholder} class="text-slate-700" />
+			<Select.Value {placeholder} class="text-slate-700">
+				{selectedLabel || placeholder}
+			</Select.Value>
 			<ChevronDown class="ml-2 h-3.5 w-3.5 shrink-0 text-slate-400" />
 		{/snippet}
 	</Select.Trigger>
@@ -63,7 +71,8 @@
 			<Select.Viewport class="p-1">
 				{#each options as option}
 					<Select.Item
-						value={option.value}
+						value={String(option.value)}
+						label={option.label}
 						disabled={option.disabled}
 						class={cn(
 							'relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-xs outline-none',
