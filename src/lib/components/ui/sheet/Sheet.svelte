@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { cn } from '$lib/utils';
 	import { X } from 'lucide-svelte';
+	import { fade, fly } from 'svelte/transition';
 
 	let {
 		open = $bindable(false),
@@ -30,21 +31,27 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-	<!-- Backdrop -->
+	<!-- Backdrop with smooth fade in/out -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+		transition:fade={{ duration: 200 }}
+		class="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs"
 		onclick={close}
 	></div>
 
-	<!-- Sheet Panel -->
+	<!-- Sheet Panel with smooth slide/fly in/out -->
 	<div
+		transition:fly={{
+			x: side === 'right' ? 320 : side === 'left' ? -320 : 0,
+			y: side === 'bottom' ? 320 : 0,
+			duration: 250
+		}}
 		class={cn(
-			"fixed z-50 bg-white p-6 shadow-2xl transition ease-in-out animate-in duration-300 flex flex-col justify-between overflow-y-auto",
-			side === 'right' && "inset-y-0 right-0 h-full w-full max-w-md border-l border-slate-200 slide-in-from-right",
-			side === 'left' && "inset-y-0 left-0 h-full w-full max-w-md border-r border-slate-200 slide-in-from-left",
-			side === 'bottom' && "inset-x-0 bottom-0 max-h-[85vh] w-full rounded-t-2xl border-t border-slate-200 slide-in-from-bottom"
+			"fixed z-50 bg-white p-6 shadow-2xl flex flex-col justify-between overflow-y-auto",
+			side === 'right' && "inset-y-0 right-0 h-full w-full max-w-md border-l border-slate-200",
+			side === 'left' && "inset-y-0 left-0 h-full w-full max-w-md border-r border-slate-200",
+			side === 'bottom' && "inset-x-0 bottom-0 max-h-[85vh] w-full rounded-t-2xl border-t border-slate-200"
 		)}
 	>
 		<div>
@@ -59,7 +66,7 @@
 				</div>
 				<button
 					onclick={close}
-					class="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+					class="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
 					aria-label="Tutup"
 				>
 					<X class="w-5 h-5" />

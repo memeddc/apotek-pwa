@@ -236,16 +236,7 @@
 </script>
 
 <div class="space-y-6">
-	<!-- Page Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-		<div>
-			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<FileSpreadsheet class="w-6 h-6 text-teal-600" />
-				Faktur Pembelian PBF
-			</h2>
-			<p class="text-xs text-slate-500 mt-1">Pencatatan penerimaan stok obat baru dari distributor (PBF)</p>
-		</div>
-	</div>
+
 
 	<!-- Header Form Card (Supplier & Date) -->
 	<Card class="border-slate-200 shadow-sm bg-gradient-to-r from-teal-50/50 to-white">

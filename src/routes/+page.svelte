@@ -5,15 +5,15 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Badge } from '$lib/components/ui/badge';
 	import {
-		ClipboardList,
+		Stethoscope,
 		Tag,
 		Pill,
-		Building2,
+		Truck,
 		FileSpreadsheet,
 		Package,
 		History,
 		ShoppingCart,
-		Receipt,
+		Printer,
 		DollarSign,
 		ArrowRight
 	} from 'lucide-svelte';
@@ -59,7 +59,7 @@
 			href: '/resep',
 			title: 'Resep Dokter',
 			desc: 'Pencarian resep nama pasien dan pembuatan resep baru',
-			icon: ClipboardList,
+			icon: Stethoscope,
 			color: 'bg-sky-50 text-sky-600 border-sky-100',
 			countKey: 'resep' as const
 		},
@@ -75,12 +75,12 @@
 			href: '/pbf',
 			title: 'PBF / Supplier',
 			desc: 'Kelola data Pedagang Besar Farmasi sebagai pemasok obat',
-			icon: Building2,
+			icon: Truck,
 			color: 'bg-amber-50 text-amber-600 border-amber-100',
 			countKey: 'pbf' as const
 		},
 		{
-			href: '/faktur',
+			href: '/mutasi/faktur',
 			title: 'Faktur Pembelian',
 			desc: 'Catat penerimaan obat dari PBF dan perbarui stok otomatis',
 			icon: FileSpreadsheet,
@@ -95,7 +95,7 @@
 			color: 'bg-teal-50 text-teal-600 border-teal-100'
 		},
 		{
-			href: '/kartu_stok',
+			href: '/mutasi/stok',
 			title: 'Kartu Stok',
 			desc: 'Audit trail riwayat mutasi obat (masuk, keluar, opname)',
 			icon: History,
@@ -113,7 +113,7 @@
 			href: '/cetak_nota',
 			title: 'Cetak Nota',
 			desc: 'Lihat dan cetak ulang nota bukti pembayaran transaksi',
-			icon: Receipt,
+			icon: Printer,
 			color: 'bg-slate-100 text-slate-700 border-slate-200'
 		},
 		{

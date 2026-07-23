@@ -8,23 +8,26 @@
 	import { CommandPalette } from '$lib/components/ui/command';
 	import { Sheet } from '$lib/components/ui/sheet';
 	import { cn } from '$lib/utils';
+	import { slide } from 'svelte/transition';
 	import {
 		LayoutDashboard,
 		ShoppingCart,
-		Receipt,
+		Stethoscope,
+		Printer,
 		FileSpreadsheet,
-		Package,
 		History,
-		DollarSign,
-		ClipboardList,
-		Tag,
 		Pill,
-		Building2,
+		Tag,
+		Truck,
+		BarChart3,
+		CreditCard,
+		ArrowLeftRight,
+		Database,
 		ChevronLeft,
 		ChevronRight,
+		ChevronDown,
 		Search,
-		MoreHorizontal,
-		BarChart3
+		MoreHorizontal
 	} from 'lucide-svelte';
 
 	let { children } = $props();
@@ -33,22 +36,84 @@
 	let commandPaletteOpen = $state(false);
 	let moreMenuOpen = $state(false);
 
-	const navItems = [
-		{ href: '/', label: 'Dashboard', icon: LayoutDashboard, primaryMobile: true },
-		{ href: '/penjualan', label: 'Penjualan', icon: ShoppingCart, primaryMobile: true },
-		{ href: '/resep', label: 'Resep Dokter', icon: ClipboardList, primaryMobile: true },
-		{ href: '/obat', label: 'Data & Stok Obat', icon: Pill, primaryMobile: true },
-		{ href: '/laporan', label: 'Laporan', icon: BarChart3, primaryMobile: true },
-		{ href: '/cetak_nota', label: 'Cetak Nota', icon: Receipt, primaryMobile: false },
-		{ href: '/faktur', label: 'Input Faktur', icon: FileSpreadsheet, primaryMobile: false },
-		{ href: '/faktur_history', label: 'Faktur History', icon: History, primaryMobile: false },
-		{ href: '/kartu_stok', label: 'Kartu Stok', icon: History, primaryMobile: false },
-		{ href: '/jenisobat', label: 'Jenis Obat', icon: Tag, primaryMobile: false },
-		{ href: '/pbf', label: 'PBF / Supplier', icon: Building2, primaryMobile: false }
+	let groupOpenStates = $state<Record<string, boolean>>({
+		transaksi: true,
+		mutasi: true,
+		dataMaster: true
+	});
+
+	function toggleGroup(groupId: string) {
+		groupOpenStates[groupId] = !groupOpenStates[groupId];
+	}
+
+	type NavItem = {
+		href: string;
+		label: string;
+		icon: any;
+	};
+
+	type NavGroup = {
+		id: string;
+		title: string;
+		icon: any;
+		items: NavItem[];
+	};
+
+	const standaloneTop: NavItem = {
+		href: '/',
+		label: 'Dashboard',
+		icon: LayoutDashboard
+	};
+
+	const navGroups: NavGroup[] = [
+		{
+			id: 'transaksi',
+			title: 'Transaksi',
+			icon: CreditCard,
+			items: [
+				{ href: '/penjualan', label: 'Penjualan', icon: ShoppingCart },
+				{ href: '/resep', label: 'Resep Dokter', icon: Stethoscope },
+				{ href: '/cetak_nota', label: 'Cetak Nota', icon: Printer }
+			]
+		},
+		{
+			id: 'mutasi',
+			title: 'Mutasi',
+			icon: ArrowLeftRight,
+			items: [
+				{ href: '/mutasi/faktur', label: 'Faktur Pembelian', icon: FileSpreadsheet },
+				{ href: '/mutasi/stok', label: 'Kartu Stok', icon: History }
+			]
+		},
+		{
+			id: 'dataMaster',
+			title: 'Data Master',
+			icon: Database,
+			items: [
+				{ href: '/obat', label: 'Data & Stok Obat', icon: Pill },
+				{ href: '/jenisobat', label: 'Jenis Obat', icon: Tag },
+				{ href: '/pbf', label: 'PBF / Supplier', icon: Truck }
+			]
+		}
 	];
 
-	const mobileMainTabs = navItems.filter((i) => i.primaryMobile);
-	const mobileMoreItems = navItems.filter((i) => !i.primaryMobile);
+	const standaloneBottom: NavItem = {
+		href: '/laporan',
+		label: 'Laporan',
+		icon: BarChart3
+	};
+
+	// Mobile main 5 tabs
+	const mobileMainTabs: NavItem[] = [
+		standaloneTop,
+		navGroups[0].items[0], // Penjualan
+		navGroups[0].items[1], // Resep Dokter
+		navGroups[2].items[0], // Data & Stok Obat
+		standaloneBottom      // Laporan
+	];
+
+	// Get overflow items grouped for mobile "Lainnya" sheet
+	const mobileMainHrefs = new Set(mobileMainTabs.map((t) => t.href));
 
 	function isActive(href: string): boolean {
 		if (href === '/') return page.url.pathname === '/';
@@ -74,18 +139,20 @@
 		<div class="flex items-center gap-3">
 			<button
 				onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
-				class="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+				class="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
 				aria-label="Toggle Sidebar"
 			>
-				{#if sidebarCollapsed}
-					<ChevronRight class="w-5 h-5" />
-				{:else}
-					<ChevronLeft class="w-5 h-5" />
-				{/if}
+				<div class="transition-transform duration-300">
+					{#if sidebarCollapsed}
+						<ChevronRight class="w-5 h-5" />
+					{:else}
+						<ChevronLeft class="w-5 h-5" />
+					{/if}
+				</div>
 			</button>
 
 			<div class="flex items-center gap-2">
-				<div class="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold shadow-sm">
+				<div class="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold shadow-sm transition-transform duration-200 hover:scale-105">
 					💊
 				</div>
 				<div>
@@ -98,7 +165,7 @@
 		<!-- Quick Search / Command Palette Trigger -->
 		<button
 			onclick={() => (commandPaletteOpen = true)}
-			class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-500 text-xs transition-colors cursor-pointer"
+			class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-500 text-xs transition-all duration-200 hover:shadow-xs cursor-pointer"
 		>
 			<Search class="w-3.5 h-3.5" />
 			<span class="hidden sm:inline">Cari modul...</span>
@@ -110,26 +177,103 @@
 		<!-- Desktop Sidebar -->
 		<aside
 			class={cn(
-				"hidden md:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 sticky top-14 h-[calc(100vh-3.5rem)] shrink-0 z-20",
+				"hidden md:flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out sticky top-14 h-[calc(100vh-3.5rem)] shrink-0 z-20 overflow-hidden",
 				sidebarCollapsed ? "w-16" : "w-64"
 			)}
 		>
-			<nav class="p-3 space-y-1 overflow-y-auto flex-1">
-				{#each navItems as item}
+			<nav class="p-3 space-y-3 overflow-y-auto flex-1 select-none">
+				<!-- Standalone Dashboard -->
+				<div>
 					<a
-						href={item.href}
+						href={standaloneTop.href}
 						class={cn(
-							"flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer",
-							isActive(item.href) ? "bg-teal-50 text-teal-700" : "hover:bg-slate-100 text-slate-600"
+							"flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer",
+							isActive(standaloneTop.href) ? "bg-teal-50 text-teal-700 font-semibold shadow-xs" : "hover:bg-slate-100 text-slate-600"
 						)}
-						title={sidebarCollapsed ? item.label : undefined}
+						title={sidebarCollapsed ? standaloneTop.label : undefined}
 					>
-						<item.icon class={cn("w-5 h-5 shrink-0", isActive(item.href) ? "text-teal-600" : "text-slate-400")} />
+						<standaloneTop.icon class={cn("w-4 h-4 shrink-0 transition-colors duration-150", isActive(standaloneTop.href) ? "text-teal-600" : "text-slate-400")} />
 						{#if !sidebarCollapsed}
-							<span class="truncate">{item.label}</span>
+							<span class="truncate transition-opacity duration-200">{standaloneTop.label}</span>
 						{/if}
 					</a>
+				</div>
+
+				<!-- Nav Groups -->
+				{#each navGroups as group}
+					<div class="pt-1 border-t border-slate-100">
+						{#if !sidebarCollapsed}
+							<!-- Group Header (Expanded mode) -->
+							<button
+								type="button"
+								onclick={() => toggleGroup(group.id)}
+								class="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600 transition-colors cursor-pointer rounded-md group"
+							>
+								<div class="flex items-center gap-2">
+									<group.icon class="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+									<span>{group.title}</span>
+								</div>
+								<ChevronDown
+									class={cn(
+										"w-3.5 h-3.5 transition-transform duration-200",
+										groupOpenStates[group.id] ? "rotate-0" : "-rotate-90"
+									)}
+								/>
+							</button>
+						{/if}
+
+						{#if sidebarCollapsed}
+							<!-- Collapsed sidebar list -->
+							<div class="space-y-0.5 mt-1">
+								{#each group.items as item}
+									<a
+										href={item.href}
+										class={cn(
+											"flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer",
+											isActive(item.href) ? "bg-teal-50 text-teal-700 font-semibold shadow-xs" : "hover:bg-slate-100 text-slate-600"
+										)}
+										title={item.label}
+									>
+										<item.icon class={cn("w-4 h-4 shrink-0 transition-colors duration-150", isActive(item.href) ? "text-teal-600" : "text-slate-400")} />
+									</a>
+								{/each}
+							</div>
+						{:else if groupOpenStates[group.id]}
+							<!-- Expanded collapsible menu list with slide transition -->
+							<div transition:slide={{ duration: 200 }} class="space-y-0.5 mt-1 overflow-hidden">
+								{#each group.items as item}
+									<a
+										href={item.href}
+										class={cn(
+											"flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer",
+											isActive(item.href) ? "bg-teal-50 text-teal-700 font-semibold shadow-xs" : "hover:bg-slate-100 text-slate-600"
+										)}
+									>
+										<item.icon class={cn("w-4 h-4 shrink-0 transition-colors duration-150", isActive(item.href) ? "text-teal-600" : "text-slate-400")} />
+										<span class="truncate">{item.label}</span>
+									</a>
+								{/each}
+							</div>
+						{/if}
+					</div>
 				{/each}
+
+				<!-- Standalone Bottom Laporan -->
+				<div class="pt-1 border-t border-slate-100">
+					<a
+						href={standaloneBottom.href}
+						class={cn(
+							"flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer",
+							isActive(standaloneBottom.href) ? "bg-teal-50 text-teal-700 font-semibold shadow-xs" : "hover:bg-slate-100 text-slate-600"
+						)}
+						title={sidebarCollapsed ? standaloneBottom.label : undefined}
+					>
+						<standaloneBottom.icon class={cn("w-4 h-4 shrink-0 transition-colors duration-150", isActive(standaloneBottom.href) ? "text-teal-600" : "text-slate-400")} />
+						{#if !sidebarCollapsed}
+							<span class="truncate">{standaloneBottom.label}</span>
+						{/if}
+					</a>
+				</div>
 			</nav>
 
 			<!-- Sidebar Footer -->
@@ -155,8 +299,8 @@
 			<a
 				href={tab.href}
 				class={cn(
-					"flex flex-col items-center justify-center py-1 px-3 rounded-lg text-xs font-medium transition-colors",
-					isActive(tab.href) ? "text-teal-600" : "text-slate-500"
+					"flex flex-col items-center justify-center py-1 px-3 rounded-lg text-xs font-medium transition-all duration-150",
+					isActive(tab.href) ? "text-teal-600 font-semibold scale-105" : "text-slate-500 hover:text-slate-700"
 				)}
 			>
 				<tab.icon class="w-5 h-5 mb-0.5" />
@@ -166,7 +310,7 @@
 
 		<button
 			onclick={() => (moreMenuOpen = true)}
-			class="flex flex-col items-center justify-center py-1 px-3 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+			class="flex flex-col items-center justify-center py-1 px-3 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 transition-all duration-150 cursor-pointer"
 		>
 			<MoreHorizontal class="w-5 h-5 mb-0.5" />
 			<span class="text-[11px]">Lainnya</span>
@@ -175,18 +319,30 @@
 
 	<!-- Mobile "More" Menu Sheet -->
 	<Sheet bind:open={moreMenuOpen} title="Menu Lainnya" side="bottom">
-		<div class="grid grid-cols-2 gap-2 py-2">
-			{#each mobileMoreItems as item}
-				<a
-					href={item.href}
-					onclick={() => (moreMenuOpen = false)}
-					class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-teal-50 hover:border-teal-200 text-slate-700 hover:text-teal-900 transition-colors"
-				>
-					<div class="p-2 rounded-lg bg-white shadow-xs text-teal-600">
-						<item.icon class="w-4 h-4" />
+		<div class="space-y-4 py-2">
+			{#each navGroups as group}
+				{#if group.items.some((item) => !mobileMainHrefs.has(item.href))}
+					<div>
+						<h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-1 flex items-center gap-1.5">
+							<group.icon class="w-3.5 h-3.5" />
+							{group.title}
+						</h4>
+						<div class="grid grid-cols-2 gap-2">
+							{#each group.items.filter((item) => !mobileMainHrefs.has(item.href)) as item}
+								<a
+									href={item.href}
+									onclick={() => (moreMenuOpen = false)}
+									class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-teal-50 hover:border-teal-200 text-slate-700 hover:text-teal-900 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
+								>
+									<div class="p-2 rounded-lg bg-white shadow-xs text-teal-600">
+										<item.icon class="w-4 h-4" />
+									</div>
+									<span class="text-xs font-semibold">{item.label}</span>
+								</a>
+							{/each}
+						</div>
 					</div>
-					<span class="text-xs font-semibold">{item.label}</span>
-				</a>
+				{/if}
 			{/each}
 		</div>
 	</Sheet>

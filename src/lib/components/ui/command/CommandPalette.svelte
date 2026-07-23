@@ -1,6 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Search, LayoutDashboard, ShoppingCart, Receipt, FileSpreadsheet, Package, History, Tag, Pill, Building2, ClipboardList, DollarSign } from 'lucide-svelte';
+	import {
+		Search,
+		LayoutDashboard,
+		ShoppingCart,
+		Stethoscope,
+		Printer,
+		FileSpreadsheet,
+		History,
+		Pill,
+		Tag,
+		Truck,
+		BarChart3
+	} from 'lucide-svelte';
+	import { fade, scale } from 'svelte/transition';
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
 
@@ -9,15 +22,14 @@
 	const navCommands = [
 		{ name: 'Dashboard', href: '/', icon: LayoutDashboard, category: 'Navigasi' },
 		{ name: 'Penjualan / POS', href: '/penjualan', icon: ShoppingCart, category: 'Transaksi' },
-		{ name: 'Cetak Nota', href: '/cetak_nota', icon: Receipt, category: 'Transaksi' },
-		{ name: 'Faktur Pembelian', href: '/faktur', icon: FileSpreadsheet, category: 'Transaksi' },
-		{ name: 'Stok Obat', href: '/stok', icon: Package, category: 'Inventaris' },
-		{ name: 'Kartu Stok', href: '/kartu_stok', icon: History, category: 'Inventaris' },
-		{ name: 'Rubah Harga', href: '/rubah_harga', icon: DollarSign, category: 'Inventaris' },
-		{ name: 'Resep Dokter', href: '/resep', icon: ClipboardList, category: 'Layanan' },
-		{ name: 'Master Jenis Obat', href: '/jenisobat', icon: Tag, category: 'Data Master' },
+		{ name: 'Resep Dokter', href: '/resep', icon: Stethoscope, category: 'Transaksi' },
+		{ name: 'Cetak Nota', href: '/cetak_nota', icon: Printer, category: 'Transaksi' },
+		{ name: 'Faktur Pembelian', href: '/mutasi/faktur', icon: FileSpreadsheet, category: 'Mutasi' },
+		{ name: 'Kartu Stok', href: '/mutasi/stok', icon: History, category: 'Mutasi' },
 		{ name: 'Master Obat', href: '/obat', icon: Pill, category: 'Data Master' },
-		{ name: 'Master PBF / Supplier', href: '/pbf', icon: Building2, category: 'Data Master' }
+		{ name: 'Master Jenis Obat', href: '/jenisobat', icon: Tag, category: 'Data Master' },
+		{ name: 'Master PBF / Supplier', href: '/pbf', icon: Truck, category: 'Data Master' },
+		{ name: 'Laporan', href: '/laporan', icon: BarChart3, category: 'Laporan' }
 	];
 
 	let filtered = $derived(
@@ -46,16 +58,20 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
+	<!-- Backdrop with fade -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-24 px-4 animate-in fade-in duration-200"
+		transition:fade={{ duration: 180 }}
+		class="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-24 px-4"
 		onclick={() => (open = false)}
 	>
+		<!-- Modal Content with scale -->
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200"
+			transition:scale={{ duration: 180, start: 0.96 }}
+			class="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden"
 			onclick={(e) => e.stopPropagation()}
 		>
 			<div class="flex items-center px-4 border-b border-slate-100">

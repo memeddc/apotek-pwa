@@ -240,17 +240,6 @@
 </script>
 
 <div class="space-y-6">
-	<!-- Page Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
-		<div>
-			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<FileText class="w-6 h-6 text-purple-600" />
-				Faktur History
-			</h2>
-			<p class="text-xs text-slate-500 mt-1">Riwayat histori transaksi faktur pembelian obat dari PBF/Supplier</p>
-		</div>
-	</div>
-
 	<!-- Filter Card -->
 	<Card class="border-slate-200 shadow-sm print:hidden">
 		<CardContent class="pt-6">
@@ -325,12 +314,12 @@
 		{:else}
 			<div class="space-y-4">
 				{#each getFilteredPurchases() as record}
-					<Card class="border-slate-200 shadow-xs hover:border-purple-400 transition-colors">
+					<Card class="border-slate-200 shadow-xs hover:border-teal-400 transition-colors">
 						<CardHeader class="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
 							<div class="flex flex-wrap items-center gap-3">
 								<Badge variant="secondary" class="font-mono text-xs font-bold text-slate-800">{record.trans_id}</Badge>
 
-								<Badge variant="secondary" class="text-[11px] text-purple-800 bg-purple-50 border-purple-200 inline-flex items-center gap-1">
+								<Badge variant="secondary" class="text-[11px] text-teal-800 bg-teal-50 border-teal-200 inline-flex items-center gap-1">
 									<Building2 class="w-3 h-3" /> {record.pbf_nama}
 								</Badge>
 
@@ -342,7 +331,7 @@
 							<div class="flex items-center gap-3">
 								<div class="text-right">
 									<span class="text-xs text-slate-400 block">Total Faktur</span>
-									<span class="text-sm font-bold text-purple-700">Rp{formatRp(record.total_trans)}</span>
+									<span class="text-sm font-bold text-teal-700">Rp{formatRp(record.total_trans)}</span>
 								</div>
 								<Button size="sm" variant="outline" class="h-8 text-xs" onclick={() => openPrint(record)}>
 									<Printer class="w-3.5 h-3.5 mr-1" /> Cetak Bukti
@@ -386,7 +375,7 @@
 														<span class="text-slate-400">-</span>
 													{/if}
 												</TableCell>
-												<TableCell class="text-right font-bold text-xs text-purple-700 font-mono">Rp{formatRp(d.total_line)}</TableCell>
+												<TableCell class="text-right font-bold text-xs text-teal-700 font-mono">Rp{formatRp(d.total_line)}</TableCell>
 											</TableRow>
 										{/each}
 									{/if}
