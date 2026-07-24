@@ -10,6 +10,10 @@
 	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { PageHeader } from '$lib/components/ui/page-header';
+	import { NumberStepper } from '$lib/components/ui/number-stepper';
+	import { CurrencyInput } from '$lib/components/ui/currency-input';
+	import ReceiptPreviewModal from '$lib/components/ui/receipt/ReceiptPreviewModal.svelte';
 	import {
 		ShoppingCart,
 		Plus,
@@ -84,6 +88,7 @@
 		bayar: number;
 		kembali: number;
 	} | null>(null);
+	let showPreviewModal = $state(false);
 
 	function formatRp(value: number): string {
 		return new Intl.NumberFormat('id-ID').format(Math.round(value));
@@ -361,9 +366,7 @@
 			toast.success(`Penjualan ${nomorNota} berhasil disimpan!`);
 
 			if (cetakNota) {
-				setTimeout(() => {
-					window.print();
-				}, 300);
+				showPreviewModal = true;
 			}
 
 			resetAll();
@@ -383,20 +386,18 @@
 
 <div class="space-y-6">
 	<!-- Page Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-		<div>
-			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<ShoppingCart class="w-6 h-6 text-teal-600" />
-				Penjualan (POS)
-			</h2>
-			<p class="text-xs text-slate-500 mt-1">Transaksi kasir penjualan obat ke pelanggan</p>
-		</div>
-
-		<div class="flex items-center gap-2 bg-teal-50 border border-teal-200 text-teal-900 px-4 py-2 rounded-xl text-sm font-semibold">
-			<span class="text-xs text-teal-600">No. Nota:</span>
-			<span class="font-mono text-base">{nomorNota || '...'}</span>
-		</div>
-	</div>
+	<PageHeader
+		title="Penjualan (POS)"
+		description="Kasir & transaksi penjualan obat langsung ke pasien"
+		badge={`Nota: ${nomorNota || '...'}`}
+	>
+		{#snippet actions()}
+			<div class="flex items-center gap-2 bg-mint-50 border border-mint-200 text-mint-900 px-4 py-2 rounded-xl text-sm font-semibold">
+				<span class="text-xs text-mint-700">No. Nota:</span>
+				<span class="font-mono text-base text-mint-900 font-bold">{nomorNota || '...'}</span>
+			</div>
+		{/snippet}
+	</PageHeader>
 
 	<!-- Main POS Grid Layout -->
 	<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -405,10 +406,10 @@
 		<div class="lg:col-span-2 space-y-6">
 			
 			<!-- Add Item Card -->
-			<Card class="border-slate-200 shadow-sm">
+			<Card class="rounded-2xl border-slate-200/80 shadow-2xs">
 				<CardHeader class="pb-3 border-b border-slate-100">
-					<CardTitle class="text-sm font-semibold text-slate-800 flex items-center gap-2">
-						<Plus class="w-4 h-4 text-teal-600" />
+					<CardTitle class="text-sm font-bold text-slate-800 flex items-center gap-2">
+						<Plus class="w-4 h-4 text-mint-600" />
 						Pilih & Tambahkan Obat
 					</CardTitle>
 				</CardHeader>
@@ -426,13 +427,13 @@
 									oninput={searchObat}
 									autocomplete="off"
 									placeholder="Ketik minimal 2 karakter..."
-									class="pl-9"
+									class="pl-9 rounded-xl border-slate-200 focus:border-mint-500"
 								/>
 							</div>
 
 							<!-- Search Results Dropdown -->
 							{#if searchLoading}
-								<div class="absolute left-0 right-0 top-full mt-1 bg-white p-2 rounded-lg border border-slate-200 shadow-lg text-xs text-slate-400 z-20">
+								<div class="absolute left-0 right-0 top-full mt-1 bg-white p-2 rounded-xl border border-slate-200 shadow-lg text-xs text-slate-400 z-20">
 									Mencari obat...
 								</div>
 							{:else if obatResults.length > 0}
@@ -441,27 +442,27 @@
 										<button
 											type="button"
 											onclick={() => pilihObat(obat)}
-											class="w-full text-left p-2.5 hover:bg-teal-50 transition-colors flex items-center justify-between text-xs cursor-pointer"
+											class="w-full text-left p-2.5 hover:bg-mint-50 transition-colors flex items-center justify-between text-xs cursor-pointer"
 										>
 											<div>
 												<div class="font-semibold text-slate-900">{obat.obat_nama}</div>
 												<div class="text-[10px] text-slate-400">Kode: {obat.obat_id}</div>
 											</div>
-											<Badge variant="secondary" class="text-[10px]">{obat.jenis_nama}</Badge>
+											<Badge variant="secondary" class="text-[10px] bg-mint-50 text-mint-700 border-mint-100">{obat.jenis_nama}</Badge>
 										</button>
 									{/each}
 								</div>
 							{/if}
 						</div>
 
-						<!-- Qty Input (Cols 2) -->
-						<div class="sm:col-span-2 space-y-1">
-							<label for="qty-jual" class="text-xs font-semibold text-slate-600">Jumlah</label>
-							<Input id="qty-jual" type="number" min="1" bind:value={inputQty} class="text-center" />
+						<!-- Qty Input (Cols 3) -->
+						<div class="sm:col-span-3 space-y-1">
+							<label for="qty-jual" class="text-xs font-semibold text-slate-600 block">Jumlah</label>
+							<NumberStepper bind:value={inputQty} min={1} max={stokInfo?.qty ?? 9999} class="w-full" />
 						</div>
 
-						<!-- Price Input (Cols 4) -->
-						<div class="sm:col-span-4 space-y-1">
+						<!-- Price Input (Cols 3) -->
+						<div class="sm:col-span-3 space-y-1">
 							<div class="flex items-center justify-between">
 								<label for="harga-jual" class="text-xs font-semibold text-slate-600">Harga (Rp)</label>
 								{#if stokInfo && stokInfo.min_price > 0}
@@ -479,14 +480,15 @@
 								type="number"
 								min="0"
 								bind:value={inputHarga}
-								class={stokInfo && stokInfo.min_price > 0 && inputHarga < stokInfo.min_price ? 'border-amber-400 bg-amber-50' : ''}
+								onfocus={(e) => e.currentTarget.select()}
+								class={`rounded-xl font-mono text-xs ${stokInfo && stokInfo.min_price > 0 && inputHarga < stokInfo.min_price ? 'border-amber-400 bg-amber-50' : ''}`}
 							/>
 						</div>
 					</div>
 
 					<!-- Stock Info Hint Banner -->
 					{#if stokInfo}
-						<div class="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-2">
+						<div class="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-2">
 							<div class="flex items-center gap-2">
 								<span class="text-slate-500">Stok Siap:</span>
 								<span class="font-bold text-slate-900">{stokInfo.qty} item</span>
@@ -503,7 +505,7 @@
 								</div>
 							{/if}
 
-							<Button size="sm" onclick={tambahItem} class="ml-auto">
+							<Button size="sm" onclick={tambahItem} class="ml-auto bg-mint-500 hover:bg-mint-600 text-white font-bold rounded-xl gap-1">
 								<Plus class="w-4 h-4 mr-1" /> Tambah Item
 							</Button>
 						</div>
@@ -512,45 +514,45 @@
 			</Card>
 
 			<!-- Cart Items Table Card -->
-			<Card class="border-slate-200 shadow-sm">
+			<Card class="rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
 				<CardHeader class="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-					<CardTitle class="text-sm font-semibold text-slate-800">Daftar Transaksi Obat</CardTitle>
-					<Badge variant="secondary">{lines.length} Item</Badge>
+					<CardTitle class="text-sm font-bold text-slate-800">Daftar Transaksi Obat</CardTitle>
+					<Badge variant="secondary" class="bg-mint-50 text-mint-700 border-mint-200 font-bold">{lines.length} Item</Badge>
 				</CardHeader>
 				<CardContent class="p-0">
-					<Table>
-						<TableHeader>
+					<Table class="table-compact table-striped">
+						<TableHeader class="bg-slate-50/80">
 							<TableRow>
-								<TableHead class="w-12 text-center">No.</TableHead>
-								<TableHead>Nama Obat</TableHead>
-								<TableHead class="text-center">Jumlah</TableHead>
-								<TableHead class="text-right">Harga</TableHead>
-								<TableHead class="text-right">Total</TableHead>
+								<TableHead class="w-12 text-center font-bold text-slate-700">No.</TableHead>
+								<TableHead class="font-bold text-slate-700">Nama Obat</TableHead>
+								<TableHead class="text-center font-bold text-slate-700">Jumlah</TableHead>
+								<TableHead class="text-right font-bold text-slate-700">Harga</TableHead>
+								<TableHead class="text-right font-bold text-slate-700">Total</TableHead>
 								<TableHead class="w-12"></TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
 							{#if lines.length === 0}
 								<TableRow>
-									<TableCell colspan={6} class="text-center py-8 text-slate-400 text-xs">
+									<TableCell colspan={6} class="text-center py-8 text-slate-400 text-xs italic">
 										Belum ada obat ditambahkan. Gunakan pencarian di atas.
 									</TableCell>
 								</TableRow>
 							{:else}
 								{#each lines as line, i}
-									<TableRow>
+									<TableRow class="hover:bg-slate-50/60">
 										<TableCell class="text-center text-xs text-slate-400">{i + 1}</TableCell>
 										<TableCell class="font-semibold text-slate-900 text-xs">
 											{line.obat_nama}
 											<span class="block text-[10px] text-slate-400 font-normal">{line.jenis_nama}</span>
 										</TableCell>
 										<TableCell class="text-center font-bold text-xs">{line.qty}</TableCell>
-										<TableCell class="text-right text-xs">Rp{formatRp(line.harga_jual)}</TableCell>
-										<TableCell class="text-right font-bold text-xs text-teal-700">
+										<TableCell class="text-right text-xs font-mono">Rp{formatRp(line.harga_jual)}</TableCell>
+										<TableCell class="text-right font-bold text-xs text-mint-700 font-mono">
 											Rp{formatRp(subtotalLine(line))}
 										</TableCell>
 										<TableCell class="text-center">
-											<Button variant="ghost" size="icon" class="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50" onclick={() => hapusItem(line.obat_id)}>
+											<Button variant="ghost" size="icon" class="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer" onclick={() => hapusItem(line.obat_id)}>
 												<Trash2 class="w-3.5 h-3.5" />
 											</Button>
 										</TableCell>
@@ -565,48 +567,74 @@
 
 		<!-- Right 1 column: Payment & Totals -->
 		<div class="space-y-6">
-			<Card class="border-slate-200 shadow-md bg-gradient-to-b from-white to-slate-50">
+			<Card class="rounded-2xl border-slate-200/80 shadow-xs bg-white">
 				<CardHeader class="pb-3 border-b border-slate-100">
-					<CardTitle class="text-sm font-semibold text-slate-800">Ringkasan Pembayaran</CardTitle>
+					<CardTitle class="text-sm font-bold text-slate-800">Ringkasan Pembayaran</CardTitle>
 				</CardHeader>
 				<CardContent class="pt-4 space-y-4">
 
 					<!-- Subtotal Row -->
 					<div class="flex items-center justify-between text-xs text-slate-500 pb-2 border-b border-slate-100">
 						<span>Harga Sebelum Diskon</span>
-						<span class="font-medium text-slate-900">Rp{formatRp(hargaSebelumDiskon())}</span>
+						<span class="font-bold text-slate-900 font-mono">Rp{formatRp(hargaSebelumDiskon())}</span>
 					</div>
 
 					<!-- Discount Inputs -->
 					<div class="grid grid-cols-2 gap-2">
 						<div class="space-y-1">
 							<label for="disc-persen" class="text-[11px] font-semibold text-slate-500">Diskon (%)</label>
-							<Input id="disc-persen" type="number" min="0" max="100" step="0.01" bind:value={totalDiscPersen} oninput={onDiscPersenChange} class="text-xs" />
+							<Input id="disc-persen" type="number" min="0" max="100" step="0.01" bind:value={totalDiscPersen} oninput={onDiscPersenChange} class="text-xs rounded-xl" />
 						</div>
 						<div class="space-y-1">
 							<label for="disc-rp" class="text-[11px] font-semibold text-slate-500">Diskon (Rp)</label>
-							<Input id="disc-rp" type="number" min="0" bind:value={totalDiscRp} oninput={onDiscRpChange} class="text-xs" />
+							<Input id="disc-rp" type="number" min="0" bind:value={totalDiscRp} oninput={onDiscRpChange} class="text-xs rounded-xl" />
 						</div>
 					</div>
 
 					<!-- Total Pay Box -->
-					<div class="p-4 rounded-xl bg-teal-900 text-white space-y-1 shadow-inner">
-						<span class="text-xs text-teal-200 font-medium">TOTAL HARUS DIBAYAR</span>
-						<div class="text-2xl font-extrabold tracking-tight">
+					<div class="p-4 rounded-xl bg-mint-950 text-white space-y-1 shadow-inner">
+						<span class="text-xs text-mint-300 font-bold uppercase tracking-wider">TOTAL HARUS DIBAYAR</span>
+						<div class="text-2xl font-extrabold tracking-tight text-mint-400 font-mono">
 							Rp{formatRp(harusDibayar())}
 						</div>
 					</div>
 
 					<!-- Customer Payment Input -->
-					<div class="space-y-1 pt-2">
-						<label for="bayar-input" class="text-xs font-semibold text-slate-700">Jumlah Uang Bayar (Rp)</label>
-						<Input id="bayar-input" type="number" min="0" bind:value={bayar} class="text-lg font-bold text-slate-900 h-11" />
+					<div class="space-y-2 pt-2">
+						<label for="bayar-input" class="text-xs font-semibold text-slate-700 block">Jumlah Uang Bayar (Rp)</label>
+						<CurrencyInput id="bayar-input" bind:value={bayar} class="h-11 text-base font-bold" />
+
+						<!-- Quick Nominal Chips -->
+						<div class="flex flex-wrap items-center gap-1.5 pt-1">
+							<button
+								type="button"
+								onclick={() => (bayar = harusDibayar())}
+								class="px-2.5 py-1 rounded-lg bg-mint-50 hover:bg-mint-100 text-mint-800 border border-mint-200 text-[11px] font-bold transition-all cursor-pointer"
+							>
+								Uang Pas
+							</button>
+							{#each [10000, 20000, 50000, 100000] as nom}
+								{#if nom >= harusDibayar() || (nom < harusDibayar() && harusDibayar() - nom < 50000)}
+									<button
+										type="button"
+										onclick={() => (bayar = nom)}
+										class={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${
+											bayar === nom
+												? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+												: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+										}`}
+									>
+										Rp{formatRp(nom)}
+									</button>
+								{/if}
+							{/each}
+						</div>
 					</div>
 
 					<!-- Change Amount -->
-					<div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-						<span class="text-xs text-emerald-800 font-medium">Kembalian</span>
-						<span class="text-lg font-bold text-emerald-700">Rp{formatRp(kembali())}</span>
+					<div class="p-3 rounded-xl bg-mint-50 border border-mint-200 flex items-center justify-between">
+						<span class="text-xs text-mint-800 font-semibold">Kembalian</span>
+						<span class="text-lg font-extrabold text-mint-700 font-mono">Rp{formatRp(kembali())}</span>
 					</div>
 
 					<!-- Receipt Toggle Option -->
@@ -626,7 +654,7 @@
 
 				<CardFooter class="flex flex-col gap-2 pt-2 border-t border-slate-100">
 					<Button
-						class="w-full h-11 text-base font-semibold"
+						class="w-full h-11 text-base font-bold bg-mint-500 hover:bg-mint-600 text-white rounded-xl shadow-xs cursor-pointer"
 						disabled={saving || loading || lines.length === 0 || bayar < harusDibayar()}
 						onclick={simpanPenjualan}
 					>
@@ -646,69 +674,14 @@
 	</div>
 </div>
 
-<!-- Hidden Thermal Printable Receipt -->
-{#if lastSavedTransaction}
-	<div id="printable-receipt" class="hidden print:block">
-		<div style="text-align: center; margin-bottom: 8px;">
-			<h3 style="font-size: 14px; font-weight: bold; margin: 0;">APOTEK PWA</h3>
-			<p style="font-size: 10px; margin: 2px 0;">Jl. Apotek Farmasi No. 1</p>
-			<p style="font-size: 10px; margin: 0;">Telp: (021) 555-0123</p>
-			<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-		</div>
-
-		<div style="font-size: 10px; margin-bottom: 6px;">
-			<div>Nota  : {lastSavedTransaction.nomorNota}</div>
-			<div>Tgl   : {new Date(lastSavedTransaction.tanggalWaktu).toLocaleString('id-ID')}</div>
-		</div>
-
-		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-
-		<table style="width: 100%; font-size: 10px; text-align: left; border-collapse: collapse;">
-			<tbody>
-				{#each lastSavedTransaction.lines as line}
-					<tr>
-						<td colspan="3" style="font-weight: bold; padding-top: 2px;">{line.obat_nama}</td>
-					</tr>
-					<tr>
-						<td style="width: 30%;">{line.qty} x Rp{formatRp(line.harga_jual)}</td>
-						<td style="text-align: right;" colspan="2">Rp{formatRp(subtotalLine(line))}</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-
-		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-
-		<div style="font-size: 10px; line-height: 1.4;">
-			<div style="display: flex; justify-content: space-between;">
-				<span>Subtotal:</span>
-				<span>Rp{formatRp(lastSavedTransaction.subtotal)}</span>
-			</div>
-			{#if lastSavedTransaction.diskon > 0}
-				<div style="display: flex; justify-content: space-between;">
-					<span>Diskon:</span>
-					<span>-Rp{formatRp(lastSavedTransaction.diskon)}</span>
-				</div>
-			{/if}
-			<div style="display: flex; justify-content: space-between; font-weight: bold;">
-				<span>TOTAL:</span>
-				<span>Rp{formatRp(lastSavedTransaction.total)}</span>
-			</div>
-			<div style="display: flex; justify-content: space-between;">
-				<span>Bayar:</span>
-				<span>Rp{formatRp(lastSavedTransaction.bayar)}</span>
-			</div>
-			<div style="display: flex; justify-content: space-between;">
-				<span>Kembali:</span>
-				<span>Rp{formatRp(lastSavedTransaction.kembali)}</span>
-			</div>
-		</div>
-
-		<div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-
-		<div style="text-align: center; font-size: 9px; margin-top: 8px;">
-			<p>Terima Kasih Semoga Lekas Sembuh</p>
-			<p>Barang yang sudah dibeli tidak dapat ditukar/dikembalikan</p>
-		</div>
-	</div>
-{/if}
+<!-- Receipt Preview Modal & Printable Receipt -->
+<ReceiptPreviewModal
+	open={showPreviewModal}
+	onClose={() => (showPreviewModal = false)}
+	nomorNota={lastSavedTransaction?.nomorNota ?? ''}
+	tanggalWaktu={lastSavedTransaction?.tanggalWaktu ?? new Date()}
+	lines={(lastSavedTransaction?.lines ?? []).map((l) => ({ nama: l.obat_nama, qty: l.qty, total: subtotalLine(l), harga: l.harga_jual }))}
+	total={lastSavedTransaction?.total ?? 0}
+	bayar={lastSavedTransaction?.bayar ?? 0}
+	kembali={lastSavedTransaction?.kembali ?? 0}
+/>

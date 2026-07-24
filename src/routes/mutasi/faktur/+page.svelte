@@ -10,6 +10,9 @@
 	import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { PageHeader } from '$lib/components/ui/page-header';
+	import { NumberStepper } from '$lib/components/ui/number-stepper';
+	import { DatePicker } from '$lib/components/ui/date-picker';
 	import { FileSpreadsheet, Plus, Search, Trash2, Save, RotateCcw, Building2, Calendar, Pill } from 'lucide-svelte';
 
 	type FakturLine = IFakturItemInput & { obat_nama: string; jenis_nama: string };
@@ -235,26 +238,29 @@
 	onMount(loadInitialData);
 </script>
 
-<div class="space-y-6">
-
+<div class="space-y-4">
+	<!-- Page Header -->
+	<PageHeader
+		title="Input Mutasi Faktur Pembelian"
+		description="Catat penerimaan faktur dari PBF supplier dan penambahan stok obat"
+		badge={`${lines.length} Item Input`}
+	/>
 
 	<!-- Header Form Card (Supplier & Date) -->
-	<Card class="border-slate-200 shadow-sm bg-gradient-to-r from-teal-50/50 to-white">
-		<CardContent class="pt-6">
+	<Card class="border border-slate-200/80 rounded-2xl shadow-2xs bg-white">
+		<CardContent class="pt-4 pb-4">
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
 				<!-- Tanggal Faktur -->
 				<div class="space-y-1.5">
-					<label for="faktur-date" class="text-xs font-semibold text-slate-700 flex items-center gap-1">
-						<Calendar class="w-3.5 h-3.5 text-teal-600" /> Tanggal Faktur
-					</label>
-					<Input id="faktur-date" type="date" bind:value={header.tanggal} class="text-xs h-10" />
+					<label for="faktur-date" class="text-xs font-semibold text-slate-700 block">Tanggal Faktur</label>
+					<DatePicker id="faktur-date" bind:value={header.tanggal} placeholder="Pilih tanggal faktur..." />
 				</div>
 
 				<!-- PBF Selector -->
 				<div class="space-y-1.5 relative">
 					<label for="pbf-search" class="text-xs font-semibold text-slate-700 flex items-center gap-1">
-						<Building2 class="w-3.5 h-3.5 text-teal-600" /> PBF / Supplier *
+						<Building2 class="w-3.5 h-3.5 text-mint-600" /> PBF / Supplier *
 					</label>
 					<div class="relative">
 						<Input
@@ -262,7 +268,7 @@
 							type="text"
 							placeholder="Cari & pilih PBF..."
 							bind:value={pbfSearch}
-							class="text-xs h-10"
+							class="text-xs h-9 rounded-xl border-slate-200 focus:border-mint-500"
 						/>
 						{#if filteredPbf().length > 0}
 							<div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl max-h-48 overflow-y-auto z-30 divide-y divide-slate-100">
@@ -270,7 +276,7 @@
 									<button
 										type="button"
 										onclick={() => pilihPbf(pbf)}
-										class="w-full text-left p-2.5 hover:bg-teal-50 text-xs flex justify-between cursor-pointer"
+										class="w-full text-left p-2.5 hover:bg-mint-50 text-xs flex justify-between cursor-pointer"
 									>
 										<span class="font-semibold text-slate-900">{pbf.pbf_nama}</span>
 										<Badge variant="secondary" class="text-[10px]">{pbf.pbf_id}</Badge>
@@ -285,10 +291,10 @@
 	</Card>
 
 	<!-- Add Items Form Card -->
-	<Card class="border-slate-200 shadow-sm">
+	<Card class="border border-slate-200/80 rounded-2xl shadow-2xs">
 		<CardHeader class="pb-3 border-b border-slate-100">
-			<CardTitle class="text-sm font-semibold text-slate-800 flex items-center gap-2">
-				<Plus class="w-4 h-4 text-teal-600" /> Tambah Item Obat ke Faktur
+			<CardTitle class="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+				<Plus class="w-4 h-4 text-mint-600" /> Tambah Item Obat ke Faktur
 			</CardTitle>
 		</CardHeader>
 		<CardContent class="pt-4">
@@ -298,18 +304,17 @@
 				<div class="sm:col-span-4 space-y-1 relative">
 					<label for="search-obat-faktur" class="text-xs font-semibold text-slate-600">Cari Obat</label>
 					<div class="relative">
-						<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
 						<Input
 							id="search-obat-faktur"
 							type="text"
-							placeholder="Nama / kode obat..."
+							placeholder="Pilih obat..."
 							bind:value={obatSearch}
 							oninput={searchObat}
-							class="pl-9 text-xs"
+							class="text-xs h-9 rounded-xl border-slate-200 focus:border-mint-500"
 						/>
 					</div>
 					{#if searchLoading}
-						<div class="absolute left-0 right-0 top-full mt-1 bg-white p-2 rounded-lg border border-slate-200 text-xs text-slate-400 z-20">
+						<div class="absolute left-0 right-0 top-full mt-1 bg-white p-2 rounded-xl border border-slate-200 shadow-lg text-xs text-slate-400 z-20">
 							Mencari...
 						</div>
 					{:else if obatResults.length > 0}
@@ -318,46 +323,46 @@
 								<button
 									type="button"
 									onclick={() => pilihObat(o)}
-									class="w-full text-left p-2.5 hover:bg-teal-50 text-xs flex justify-between cursor-pointer"
+									class="w-full text-left p-2.5 hover:bg-mint-50 text-xs flex justify-between cursor-pointer"
 								>
 									<span class="font-semibold text-slate-900">{o.obat_nama}</span>
-									<span class="text-[10px] text-slate-400">{o.obat_id}</span>
+									<Badge variant="secondary" class="text-[10px]">{o.obat_id}</Badge>
 								</button>
 							{/each}
 						</div>
 					{/if}
 				</div>
 
-				<!-- Jml Box (Cols 2) -->
-				<div class="sm:col-span-2 space-y-1">
-					<label for="jml-box" class="text-xs font-semibold text-slate-600">Jml Box</label>
-					<Input id="jml-box" type="number" min="1" bind:value={item.jumlah_box} class="text-xs text-center" />
+				<!-- Jml Box (Cols 3) -->
+				<div class="sm:col-span-3 space-y-1">
+					<label for="jml-box" class="text-xs font-semibold text-slate-600 block">Jml Box</label>
+					<NumberStepper bind:value={item.jumlah_box} min={1} class="w-full" />
 				</div>
 
-				<!-- Isi / Box (Cols 2) -->
-				<div class="sm:col-span-2 space-y-1">
-					<label for="isi-box" class="text-xs font-semibold text-slate-600">Isi/Box</label>
-					<Input id="isi-box" type="number" min="1" bind:value={item.isi_per_box} class="text-xs text-center" />
+				<!-- Isi / Box (Cols 3) -->
+				<div class="sm:col-span-3 space-y-1">
+					<label for="isi-box" class="text-xs font-semibold text-slate-600 block">Isi/Box</label>
+					<NumberStepper bind:value={item.isi_per_box} min={1} class="w-full" />
 				</div>
 
-				<!-- Harga / Box (Cols 2) -->
-				<div class="sm:col-span-2 space-y-1">
+				<!-- Harga / Box (Cols 3) -->
+				<div class="sm:col-span-3 space-y-1">
 					<label for="harga-box" class="text-xs font-semibold text-slate-600">Harga/Box (Rp)</label>
-					<Input id="harga-box" type="number" min="0" bind:value={item.harga_per_box} class="text-xs text-right" />
+					<Input id="harga-box" type="number" min="0" bind:value={item.harga_per_box} onfocus={(e) => e.currentTarget.select()} class="text-xs h-9 rounded-xl font-mono" />
 				</div>
 
-				<!-- Disc % (Cols 2) -->
-				<div class="sm:col-span-2 space-y-1">
+				<!-- Disc % (Cols 3) -->
+				<div class="sm:col-span-3 space-y-1">
 					<label for="disc-item" class="text-xs font-semibold text-slate-600">Disc (%)</label>
-					<Input id="disc-item" type="number" min="0" max="100" step="0.1" bind:value={item.disc} class="text-xs text-center" />
+					<Input id="disc-item" type="number" min="0" max="100" step="0.1" bind:value={item.disc} onfocus={(e) => e.currentTarget.select()} class="text-xs h-9 rounded-xl" />
 				</div>
 			</div>
 
 			<div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end mt-3 pt-3 border-t border-slate-100">
 				<!-- Tgl Expired (Cols 4) -->
 				<div class="sm:col-span-4 space-y-1">
-					<label for="exp-date" class="text-xs font-semibold text-slate-600">Tgl Kedaluwarsa *</label>
-					<Input id="exp-date" type="date" bind:value={item.expired_date} class="text-xs" />
+					<label for="exp-date" class="text-xs font-semibold text-slate-600 block">Tgl Kedaluwarsa *</label>
+					<DatePicker id="exp-date" bind:value={item.expired_date} placeholder="Pilih tgl exp..." />
 				</div>
 
 				<!-- Diberikan Radio (Cols 4) -->
@@ -378,7 +383,7 @@
 
 				<!-- Add Button (Cols 4) -->
 				<div class="sm:col-span-4 flex justify-end">
-					<Button size="sm" onclick={tambahItem} class="w-full sm:w-auto">
+					<Button size="sm" onclick={tambahItem} class="w-full sm:w-auto h-9 bg-mint-500 hover:bg-mint-600 text-white font-bold rounded-xl gap-1 cursor-pointer">
 						<Plus class="w-4 h-4 mr-1" /> Tambah Obat
 					</Button>
 				</div>
@@ -387,31 +392,31 @@
 	</Card>
 
 	<!-- Table Added Items Card -->
-	<Card class="border-slate-200 shadow-sm">
-		<CardHeader class="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-			<CardTitle class="text-sm font-semibold text-slate-800">Daftar Item Faktur</CardTitle>
-			<div class="text-xs font-bold text-teal-700">
+	<Card class="border border-slate-200/80 rounded-2xl shadow-2xs overflow-hidden">
+		<CardHeader class="pb-3 pt-3 border-b border-slate-100 flex flex-row items-center justify-between">
+			<CardTitle class="text-xs font-bold text-slate-800 uppercase tracking-wider">Daftar Item Faktur</CardTitle>
+			<div class="text-sm font-extrabold text-mint-700 font-mono">
 				Total Faktur: Rp{number(totalFaktur())}
 			</div>
 		</CardHeader>
 		<CardContent class="p-0">
-			<Table>
-				<TableHeader>
+			<Table class="table-compact table-striped">
+				<TableHeader class="bg-slate-50/80">
 					<TableRow>
-						<TableHead class="w-12 text-center">No.</TableHead>
-						<TableHead>Nama Obat</TableHead>
-						<TableHead class="text-center">Jml Box</TableHead>
-						<TableHead class="text-center">Isi/Box</TableHead>
-						<TableHead class="text-right">Harga Satuan</TableHead>
-						<TableHead class="text-center">Disc (%)</TableHead>
-						<TableHead class="text-right">Total Net</TableHead>
+						<TableHead class="w-12 text-center font-bold text-slate-700">No.</TableHead>
+						<TableHead class="font-bold text-slate-700">Nama Obat</TableHead>
+						<TableHead class="text-center font-bold text-slate-700">Jml Box</TableHead>
+						<TableHead class="text-center font-bold text-slate-700">Isi/Box</TableHead>
+						<TableHead class="text-right font-bold text-slate-700">Harga Satuan</TableHead>
+						<TableHead class="text-center font-bold text-slate-700">Disc (%)</TableHead>
+						<TableHead class="text-right font-bold text-slate-700">Total Net</TableHead>
 						<TableHead class="w-12"></TableHead>
 					</TableRow>
 				</TableHeader>
 				<TableBody>
 					{#if lines.length === 0}
 						<TableRow>
-							<TableCell colspan={8} class="text-center py-8 text-slate-400 text-xs">
+							<TableCell colspan={8} class="text-center py-8 text-slate-400 text-xs italic">
 								Belum ada obat dimasukkan ke faktur.
 							</TableCell>
 						</TableRow>

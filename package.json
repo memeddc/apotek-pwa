@@ -48,6 +48,7 @@
 		"@internationalized/date": "^3.12.2",
 		"@supabase/server": "^1.4.0",
 		"@supabase/supabase-js": "^2.110.5",
-		"dexie": "^4.4.4"
+		"dexie": "^4.4.4",
+		"layercake": "^10.0.3"
 	}
 }

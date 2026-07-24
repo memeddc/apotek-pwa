@@ -8,6 +8,8 @@
 	import { Card, CardHeader, CardTitle, CardContent } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { PageHeader } from '$lib/components/ui/page-header';
+	import { DatePicker } from '$lib/components/ui/date-picker';
 	import {
 		BarChart3,
 		Calendar,
@@ -617,55 +619,39 @@
 
 <div class="space-y-6">
 	<!-- Page Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
-		<div>
-			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<BarChart3 class="w-6 h-6 text-teal-600" />
-				Laporan Transaksi & Keuangan
-			</h2>
-			<p class="text-xs text-slate-500 mt-1">Analisis akumulasi & harian untuk penjualan, pembelian PBF, dan omset</p>
-		</div>
-
-		<div class="flex items-center gap-2">
-			<Button variant="outline" size="sm" onclick={downloadPDF} class="text-xs border-red-200 text-red-700 hover:bg-red-50">
-				<FileText class="w-4 h-4 mr-1.5 text-red-600" /> Download PDF
-			</Button>
-			<Button variant="outline" size="sm" onclick={downloadExcel} class="text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-				<FileSpreadsheet class="w-4 h-4 mr-1.5 text-emerald-600" /> Download Excel
-			</Button>
-		</div>
+	<div class="print:hidden">
+		<PageHeader
+			title="Laporan Transaksi & Keuangan"
+			description="Analisis akumulasi & harian untuk penjualan, pembelian PBF, dan margin omset"
+			badge={`${allSales.length} Penjualan`}
+		>
+			{#snippet actions()}
+				<div class="flex items-center gap-2">
+					<Button variant="outline" size="sm" onclick={downloadPDF} class="text-xs border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl cursor-pointer">
+						<FileText class="w-4 h-4 mr-1.5 text-rose-600" /> PDF
+					</Button>
+					<Button variant="outline" size="sm" onclick={downloadExcel} class="text-xs border-mint-200 text-mint-700 hover:bg-mint-50 rounded-xl cursor-pointer">
+						<FileSpreadsheet class="w-4 h-4 mr-1.5 text-mint-600" /> Excel
+					</Button>
+				</div>
+			{/snippet}
+		</PageHeader>
 	</div>
 
 	<!-- Filter Card & Switch Controls -->
-	<Card class="border-slate-200 shadow-sm print:hidden">
+	<Card class="rounded-2xl border-slate-200/80 shadow-2xs print:hidden">
 		<CardContent class="pt-6">
 			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
 				<!-- Begda (Dari Tanggal) -->
 				<div class="lg:col-span-4 space-y-1">
 					<label for="date-from" class="text-xs font-semibold text-slate-600">Dari Tanggal (Begda)</label>
-					<Input
-						id="date-from"
-						type="date"
-						bind:value={dateFrom}
-						onchange={onDateChange}
-						onclick={(e) => e.currentTarget.showPicker?.()}
-						onfocus={(e) => e.currentTarget.showPicker?.()}
-						class="text-xs cursor-pointer"
-					/>
+					<DatePicker id="date-from" bind:value={dateFrom} onchange={onDateChange} placeholder="Pilih dari tanggal..." />
 				</div>
 
 				<!-- Endda (Sampai Tanggal) -->
 				<div class="lg:col-span-4 space-y-1">
 					<label for="date-to" class="text-xs font-semibold text-slate-600">Sampai Tanggal (Endda)</label>
-					<Input
-						id="date-to"
-						type="date"
-						bind:value={dateTo}
-						onchange={onDateChange}
-						onclick={(e) => e.currentTarget.showPicker?.()}
-						onfocus={(e) => e.currentTarget.showPicker?.()}
-						class="text-xs cursor-pointer"
-					/>
+					<DatePicker id="date-to" bind:value={dateTo} onchange={onDateChange} placeholder="Pilih sampai tanggal..." />
 				</div>
 
 				<!-- PerHari Switch Toggle -->
@@ -674,10 +660,11 @@
 						<button
 							type="button"
 							role="switch"
+							aria-label="Mode PerHari"
 							aria-checked={isPerHari}
 							onclick={togglePerHari}
 							class={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-								isPerHari ? 'bg-teal-600' : 'bg-slate-300'
+								isPerHari ? 'bg-mint-500' : 'bg-slate-300'
 							}`}
 						>
 							<span
@@ -694,7 +681,7 @@
 						</div>
 					</div>
 
-					<Button size="sm" onclick={loadReportData} disabled={loading} class="ml-auto">
+					<Button size="sm" onclick={loadReportData} disabled={loading} class="ml-auto bg-mint-500 hover:bg-mint-600 text-white font-bold rounded-xl px-4 cursor-pointer">
 						{loading ? 'Memuat...' : 'Proses'}
 					</Button>
 				</div>
@@ -887,8 +874,8 @@
 						Ringkasan Obat Terjual ({isPerHari ? formatTanggalIndo(selectedDateTab) : 'Akumulasi'})
 					</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<Table>
+				<CardContent class="p-0">
+					<Table class="table-compact table-striped">
 						<TableHeader>
 							<TableRow>
 								<TableHead class="w-12 text-center">#</TableHead>
@@ -934,8 +921,8 @@
 						Ringkasan Obat Dibeli dari PBF ({isPerHari ? formatTanggalIndo(selectedDateTab) : 'Akumulasi'})
 					</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<Table>
+				<CardContent class="p-0">
+					<Table class="table-compact table-striped">
 						<TableHeader>
 							<TableRow>
 								<TableHead class="w-12 text-center">#</TableHead>
@@ -998,8 +985,8 @@
 								</div>
 								<span class="text-sm font-bold text-teal-700">Rp{formatRp(sale.total_trans)}</span>
 							</CardHeader>
-							<CardContent class="pt-2">
-								<Table>
+							<CardContent class="p-0">
+								<Table class="table-compact table-striped">
 									<TableHeader>
 										<TableRow>
 											<TableHead>Nama Obat</TableHead>
@@ -1050,8 +1037,8 @@
 								</div>
 								<span class="text-sm font-bold text-purple-700">Rp{formatRp(purchase.total_trans)}</span>
 							</CardHeader>
-							<CardContent class="pt-2">
-								<Table>
+							<CardContent class="p-0">
+								<Table class="table-compact table-striped">
 									<TableHeader>
 										<TableRow>
 											<TableHead>Nama Obat</TableHead>
@@ -1097,22 +1084,22 @@
 	<!-- Print KPI Summary -->
 	<div class="grid grid-cols-3 gap-3 border p-3 rounded text-xs mb-4">
 		<div>
-			<span class="block text-[10px] text-slate-500 uppercase">Total Penjualan</span>
+			<span class="block text-[10px] text-slate-500 font-semibold">Total Penjualan</span>
 			<strong class="text-sm">Rp{formatRp(calcTotalOmset())}</strong>
 		</div>
 		<div>
-			<span class="block text-[10px] text-slate-500 uppercase">Total Pembelian PBF</span>
+			<span class="block text-[10px] text-slate-500 font-semibold">Total Pembelian PBF</span>
 			<strong class="text-sm">Rp{formatRp(calcTotalPembelian())}</strong>
 		</div>
 		<div>
-			<span class="block text-[10px] text-slate-500 uppercase">Estimasi Margin</span>
+			<span class="block text-[10px] text-slate-500 font-semibold">Estimasi Margin</span>
 			<strong class="text-sm">Rp{formatRp(calcGrossProfit())} ({calcProfitMarginPct()}%)</strong>
 		</div>
 	</div>
 
 	<!-- Print Section 1: Obat Terjual -->
 	<div class="space-y-2">
-		<h3 class="text-xs font-bold uppercase tracking-wider border-b pb-1">1. Ringkasan Penjualan Obat</h3>
+		<h3 class="text-xs font-bold border-b pb-1">1. Ringkasan Penjualan Obat</h3>
 		<table class="w-full text-xs text-left border-collapse border border-slate-300">
 			<thead>
 				<tr class="bg-slate-100">
@@ -1145,7 +1132,7 @@
 
 	<!-- Print Section 2: Pembelian PBF -->
 	<div class="space-y-2 pt-4">
-		<h3 class="text-xs font-bold uppercase tracking-wider border-b pb-1">2. Ringkasan Pembelian Obat (PBF)</h3>
+		<h3 class="text-xs font-bold border-b pb-1">2. Ringkasan Pembelian Obat (PBF)</h3>
 		<table class="w-full text-xs text-left border-collapse border border-slate-300">
 			<thead>
 				<tr class="bg-slate-100">

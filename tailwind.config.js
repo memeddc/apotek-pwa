@@ -3,20 +3,44 @@ export default {
 	content: ['./src/**/*.{html,js,svelte,ts}'],
 	theme: {
 		extend: {
+			fontFamily: {
+				sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif']
+			},
 			colors: {
+				mint: {
+					50: '#eefcf5',
+					100: '#d6f7e6',
+					200: '#b0eece',
+					300: '#7ce0af',
+					400: '#45cb8e',
+					500: '#1eb373',
+					600: '#12925b',
+					700: '#11744b',
+					800: '#125c3d',
+					900: '#114c34',
+					950: '#082b1e'
+				},
 				teal: {
-					50: '#f0fdfa',
-					100: '#ccfbf1',
-					200: '#99f6e4',
-					300: '#5eead4',
-					400: '#2dd4bf',
-					500: '#14b8a6',
-					600: '#0d9488',
-					700: '#0f766e',
-					800: '#115e59',
-					900: '#134e4a',
-					950: '#042f2e'
+					50: '#eefcf5',
+					100: '#d6f7e6',
+					200: '#b0eece',
+					300: '#7ce0af',
+					400: '#45cb8e',
+					500: '#1eb373',
+					600: '#12925b',
+					700: '#11744b',
+					800: '#125c3d',
+					900: '#114c34',
+					950: '#082b1e'
 				}
+			},
+			borderRadius: {
+				'control': '8px',
+				'input': '10px',
+				'button': '10px',
+				'card-sm': '14px',
+				'card': '18px',
+				'section': '22px'
 			}
 		}
 	},

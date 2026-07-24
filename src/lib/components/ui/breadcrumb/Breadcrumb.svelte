@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { ChevronRight, Home } from 'lucide-svelte';
+	import { cn } from '$lib/utils';
+
+	let { class: className = '' }: { class?: string } = $props();
 
 	const routeNames: Record<string, string> = {
 		'': 'Dashboard',
@@ -27,7 +30,7 @@
 	});
 </script>
 
-<nav aria-label="Breadcrumb" class="flex items-center space-x-1 text-xs text-slate-500 mb-4">
+<nav aria-label="Breadcrumb" class={cn("flex items-center space-x-1 text-xs text-slate-500", className)}>
 	<a href="/" class="flex items-center hover:text-teal-600 transition-colors">
 		<Home class="w-3.5 h-3.5 mr-1" />
 		<span>Home</span>

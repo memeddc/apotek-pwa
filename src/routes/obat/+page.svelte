@@ -11,7 +11,10 @@
 	import { AlertDialog } from '$lib/components/ui/alert-dialog';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Pill, Plus, Search, Edit2, Trash2, Save, Pause, Play, ChevronLeft, ChevronRight, DollarSign } from 'lucide-svelte';
+	import { PageHeader } from '$lib/components/ui/page-header';
+	import { DataToolbar } from '$lib/components/ui/data-toolbar';
+	import { Pagination } from '$lib/components/ui/pagination';
+	import { Pill, Plus, Search, Edit2, Trash2, Save, Pause, Play, ChevronLeft, ChevronRight, DollarSign, SearchX } from 'lucide-svelte';
 
 	type ObatMergedRow = {
 		obat_id: string;
@@ -31,8 +34,7 @@
 	let searchQuery = $state('');
 	let loading = $state(true);
 	let currentPage = $state(1);
-	let pageSize = $state(100);
-	let pageSizeStr = $state('100');
+	let pageSize = $state(25);
 	let totalCount = $state(0);
 	let searchTimer: ReturnType<typeof setTimeout>;
 	let idTimer: ReturnType<typeof setTimeout>;
@@ -182,20 +184,6 @@
 		clearTimeout(searchTimer);
 		currentPage = 1;
 		searchTimer = setTimeout(loadData, 300);
-	}
-
-	function previousPage() {
-		if (currentPage > 1) {
-			currentPage -= 1;
-			loadData();
-		}
-	}
-
-	function nextPage() {
-		if (currentPage < totalPages()) {
-			currentPage += 1;
-			loadData();
-		}
 	}
 
 	function obatPrefix(name: string): string {
@@ -443,38 +431,30 @@
 	});
 </script>
 
-<div class="space-y-6">
+<div class="space-y-4">
 	<!-- Page Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-		<div>
-			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<Pill class="w-6 h-6 text-teal-600" />
-				Data & Stok Obat
-			</h2>
-			<p class="text-xs text-slate-500 mt-1">Kelola master obat, persediaan stok, serta penyesuaian harga PBF dan harga jual</p>
-		</div>
+	<PageHeader
+		title="Data & Stok Obat"
+		description="Kelola master obat, persediaan stok, serta penyesuaian harga PBF dan harga jual"
+		badge={`${totalCount} Item`}
+	>
+		{#snippet actions()}
+			<Button onclick={openAdd} class="bg-mint-500 hover:bg-mint-600 text-white font-bold rounded-xl gap-2 shadow-xs cursor-pointer">
+				<Plus class="w-4 h-4" /> Tambah Obat & Stok
+			</Button>
+		{/snippet}
+	</PageHeader>
 
-		<Button onclick={openAdd}>
-			<Plus class="w-4 h-4 mr-2" /> Tambah Obat & Stok
-		</Button>
-	</div>
-
-	<!-- Toolbar & Filters -->
-	<div class="flex flex-wrap items-center justify-between gap-4">
-		<div class="flex flex-wrap items-center gap-3 flex-1">
-			<!-- Search Box -->
-			<div class="relative min-w-[240px] max-w-xs">
-				<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
-				<Input
-					type="search"
-					placeholder="Cari nama atau kode..."
-					bind:value={searchQuery}
-					oninput={handleSearch}
-					class="pl-9"
-				/>
-			</div>
-
-			<!-- Filter Status Select -->
+	<!-- Data Toolbar -->
+	<DataToolbar
+		searchPlaceholder="Cari nama atau kode obat..."
+		bind:searchValue={searchQuery}
+		onSearchInput={handleSearch}
+		totalItems={totalCount}
+		filteredCount={getDisplayData().length}
+		itemLabel="obat"
+	>
+		{#snippet filters()}
 			<Select
 				bind:value={filterMode}
 				onValueChange={() => {
@@ -488,229 +468,218 @@
 					{ value: 'bisa_hapus', label: 'Bisa Dihapus' },
 					{ value: 'ada_transaksi', label: 'Ada Transaksi' }
 				]}
-				class="w-40"
+				class="w-36 h-9 text-xs rounded-xl border-slate-200"
 			/>
+		{/snippet}
+	</DataToolbar>
 
-			<!-- Page Size Select -->
-			<Select
-				bind:value={pageSizeStr}
-				onValueChange={(val) => {
-					pageSize = Number(val);
-					currentPage = 1;
-					loadData();
-				}}
-				options={[
-					{ value: '100', label: '100 / Hal' },
-					{ value: '500', label: '500 / Hal' },
-					{ value: '1000', label: '1000 / Hal' }
-				]}
-				class="w-32"
-			/>
-		</div>
-
-		<div class="text-xs text-slate-500 font-medium">
-			Total: <strong>{totalCount.toLocaleString('id-ID')}</strong> obat
-		</div>
-	</div>
-
-	<!-- Merged Data Table -->
-	<Table>
-		<TableHeader>
-			<TableRow>
-				<TableHead class="w-24">Kode</TableHead>
-				<TableHead>Nama Obat</TableHead>
-				<TableHead>Jenis</TableHead>
-				<TableHead class="w-20 text-center">Stok</TableHead>
-				<TableHead class="text-right">Harga PBF</TableHead>
-				<TableHead class="text-right">Harga Jual</TableHead>
-				<TableHead class="text-center">Margin</TableHead>
-				<TableHead class="text-center w-16">Diberikan</TableHead>
-				<TableHead class="w-20 text-center">Status</TableHead>
-				<TableHead class="w-32 text-right">Aksi</TableHead>
-			</TableRow>
-		</TableHeader>
-		<TableBody>
-			{#if loading}
-				{#each Array(6) as _}
-					<TableRow>
-						<TableCell><Skeleton class="h-5 w-16" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-36" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-20" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-12 mx-auto" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-12 mx-auto" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-8 mx-auto" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-14 mx-auto" /></TableCell>
-						<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
-					</TableRow>
-				{/each}
-			{:else if getDisplayData().length === 0}
-				<TableRow>
-					<TableCell colspan={10} class="text-center py-8 text-slate-400 text-xs">
-						Tidak ada data obat ditemukan.
-					</TableCell>
+	<!-- Merged Data Table Container -->
+	<div class="rounded-2xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
+		<Table class="table-compact table-striped">
+			<TableHeader class="bg-slate-50/80 border-b border-slate-200/80">
+				<TableRow class="hover:bg-transparent">
+					<TableHead class="w-24 font-bold text-slate-700">Kode</TableHead>
+					<TableHead class="font-bold text-slate-700">Nama Obat</TableHead>
+					<TableHead class="font-bold text-slate-700">Jenis</TableHead>
+					<TableHead class="w-20 text-center font-bold text-slate-700">Stok</TableHead>
+					<TableHead class="text-right font-bold text-slate-700">Harga PBF</TableHead>
+					<TableHead class="text-right font-bold text-slate-700">Harga Jual</TableHead>
+					<TableHead class="text-center font-bold text-slate-700">Margin</TableHead>
+					<TableHead class="text-center w-16 font-bold text-slate-700">Disc PBF</TableHead>
+					<TableHead class="w-20 text-center font-bold text-slate-700">Status</TableHead>
+					<TableHead class="w-32 text-right font-bold text-slate-700">Aksi</TableHead>
 				</TableRow>
-			{:else}
-				{#each getDisplayData() as item}
-					{@const marginPct = hitungMargin(item.harga_pbf, item.harga_jual)}
-					<TableRow class={item.isActive === 0 ? 'opacity-60 bg-slate-50/50' : ''}>
-						<!-- Kode Obat -->
-						<TableCell>
-							<Badge variant="secondary" class="font-mono text-xs text-purple-700 bg-purple-50">{item.obat_id}</Badge>
-						</TableCell>
-
-						<!-- Nama Obat -->
-						<TableCell class="font-semibold text-slate-900 text-xs">
-							<span class={item.isActive === 0 ? 'line-through text-slate-400' : ''}>{item.obat_nama}</span>
-							{#if item.ket_obat}
-								<span class="block text-[10px] text-slate-400 font-normal truncate max-w-xs">{item.ket_obat}</span>
-							{/if}
-						</TableCell>
-
-						<!-- Jenis -->
-						<TableCell>
-							<Badge variant="outline" class="text-[11px] font-normal">{item.jenis_nama}</Badge>
-						</TableCell>
-
-						<!-- Stok Qty -->
-						<TableCell class="text-center font-bold text-xs">
-							{#if item.qty <= 0}
-								<Badge variant="destructive" class="text-[10px]">0</Badge>
-							{:else if item.qty < 10}
-								<Badge variant="secondary" class="text-[10px] bg-amber-50 text-amber-700 border-amber-200">{item.qty}</Badge>
-							{:else}
-								<span class="text-slate-800">{item.qty}</span>
-							{/if}
-						</TableCell>
-
-						<!-- Harga PBF -->
-						<TableCell class="text-right text-xs text-slate-600 font-mono">
-							Rp{formatRp(item.harga_pbf)}
-						</TableCell>
-
-						<!-- Harga Jual -->
-						<TableCell class="text-right text-xs font-bold text-teal-700 font-mono">
-							Rp{formatRp(item.harga_jual)}
-						</TableCell>
-
-						<!-- Margin (%) -->
-						<TableCell class="text-center text-xs">
-							{#if marginPct >= 10}
-								<Badge variant="success" class="text-[10px]">+{marginPct}%</Badge>
-							{:else if marginPct > 0}
-								<Badge variant="secondary" class="text-[10px] bg-amber-50 text-amber-700">+{marginPct}%</Badge>
-							{:else}
-								<Badge variant="destructive" class="text-[10px]">{marginPct}%</Badge>
-							{/if}
-						</TableCell>
-
-						<!-- Diskon PBF (Diberikan) -->
-						<TableCell class="text-center text-xs">
-							{#if item.diberikan === 1}
-								<span class="text-emerald-600 font-bold" title="Diskon PBF Diberikan">✓</span>
-							{:else}
-								<span class="text-slate-300" title="Tidak Diberikan">✗</span>
-							{/if}
-						</TableCell>
-
-						<!-- Status (isActive) -->
-						<TableCell class="text-center">
-							{#if item.isActive === 1}
-								<Badge variant="success" class="text-[10px]">Aktif</Badge>
-							{:else}
-								<Badge variant="destructive" class="text-[10px]">Nonaktif</Badge>
-							{/if}
-						</TableCell>
-
-						<!-- Aksi -->
-						<TableCell class="text-right">
-							<div class="flex items-center justify-end gap-1">
-								<!-- Rubah Harga Quick Button -->
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-7 w-7 text-teal-600 hover:bg-teal-50"
-									title="Rubah Harga & Stok"
-									onclick={() => openRubahHarga(item)}
-								>
-									<DollarSign class="w-3.5 h-3.5" />
-								</Button>
-
-								<!-- Edit Master Obat & Stok Sheet Button -->
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-7 w-7 text-slate-600 hover:text-teal-600"
-									title="Edit Detail Obat"
-									onclick={() => openEdit(item)}
-								>
-									<Edit2 class="w-3.5 h-3.5" />
-								</Button>
-
-								<!-- Toggle Aktif/Nonaktif atau Hapus -->
-								{#if hasTransactions.has(item.obat_id)}
-									{#if item.isActive === 1}
-										<Button
-											variant="outline"
-											size="sm"
-											class="h-7 text-[10px] text-amber-700 hover:bg-amber-50"
-											onclick={() => setActive(item, 0)}
-										>
-											<Pause class="w-3 h-3 mr-1" /> Nonaktifkan
-										</Button>
-									{:else}
-										<Button
-											variant="outline"
-											size="sm"
-											class="h-7 text-[10px] text-emerald-700 hover:bg-emerald-50"
-											onclick={() => setActive(item, 1)}
-										>
-											<Play class="w-3 h-3 mr-1" /> Aktifkan
-										</Button>
-									{/if}
-								{:else}
-									{#if item.isActive === 0}
-										<Button
-											variant="outline"
-											size="sm"
-											class="h-7 text-[10px] text-emerald-700 hover:bg-emerald-50"
-											onclick={() => setActive(item, 1)}
-										>
-											<Play class="w-3 h-3 mr-1" /> Aktifkan
-										</Button>
-									{/if}
-									<Button
-										variant="ghost"
-										size="icon"
-										class="h-7 w-7 text-slate-400 hover:text-red-600"
-										title="Hapus Obat"
-										onclick={() => confirmDelete(item)}
-									>
-										<Trash2 class="w-3.5 h-3.5" />
-									</Button>
-								{/if}
+			</TableHeader>
+			<TableBody>
+				{#if loading}
+					{#each Array(6) as _}
+						<TableRow>
+							<TableCell><Skeleton class="h-5 w-16" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-36" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-20" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-12 mx-auto" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-12 mx-auto" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-8 mx-auto" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-14 mx-auto" /></TableCell>
+							<TableCell><Skeleton class="h-5 w-20 ml-auto" /></TableCell>
+						</TableRow>
+					{/each}
+				{:else if getDisplayData().length === 0}
+					<TableRow>
+						<TableCell colspan={10} class="text-center py-12 text-slate-400">
+							<div class="flex flex-col items-center justify-center gap-2">
+								<SearchX class="w-8 h-8 text-slate-300" />
+								<p class="text-xs font-semibold text-slate-600">Tidak ada data obat ditemukan</p>
+								<p class="text-[11px] text-slate-400">Coba sesuaikan kata kunci atau filter status yang dipilih.</p>
 							</div>
 						</TableCell>
 					</TableRow>
-				{/each}
-			{/if}
-		</TableBody>
-	</Table>
+				{:else}
+					{#each getDisplayData() as item}
+						{@const marginPct = hitungMargin(item.harga_pbf, item.harga_jual)}
+						<TableRow class={item.isActive === 0 ? 'opacity-60 bg-slate-50/50' : ''}>
+							<!-- Kode Obat -->
+							<TableCell>
+								<Badge variant="secondary" class="font-mono text-xs text-purple-700 bg-purple-50">{item.obat_id}</Badge>
+							</TableCell>
 
-	<!-- Pagination Bar -->
-	<div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-2">
-		<div>
-			Halaman <strong>{currentPage}</strong> dari <strong>{totalPages()}</strong>
-		</div>
-		<div class="flex items-center gap-2">
-			<Button variant="outline" size="sm" disabled={loading || currentPage === 1} onclick={previousPage}>
-				<ChevronLeft class="w-4 h-4 mr-1" /> Sebelumnya
-			</Button>
-			<Button variant="outline" size="sm" disabled={loading || currentPage === totalPages()} onclick={nextPage}>
-				Berikutnya <ChevronRight class="w-4 h-4 ml-1" />
-			</Button>
-		</div>
+							<!-- Nama Obat -->
+							<TableCell class="font-medium text-slate-800 text-xs">
+								<span class={item.isActive === 0 ? 'line-through text-slate-400' : 'font-semibold text-slate-900'}>{item.obat_nama}</span>
+								{#if item.ket_obat}
+									<span class="block text-[10px] text-slate-400 font-normal truncate max-w-xs">{item.ket_obat}</span>
+								{/if}
+							</TableCell>
+
+							<!-- Jenis -->
+							<TableCell>
+								<Badge variant="outline" class="text-[11px] font-normal">{item.jenis_nama}</Badge>
+							</TableCell>
+
+							<!-- Stok Qty -->
+							<TableCell class="text-center font-bold text-xs">
+								{#if item.qty <= 0}
+									<Badge variant="destructive" class="text-[10px]">0</Badge>
+								{:else if item.qty < 10}
+									<Badge variant="secondary" class="text-[10px] bg-amber-50 text-amber-700 border-amber-200">{item.qty}</Badge>
+								{:else}
+									<span class="text-slate-800">{item.qty}</span>
+								{/if}
+							</TableCell>
+
+							<!-- Harga PBF -->
+							<TableCell class="text-right text-xs text-slate-600 font-mono">
+								Rp{formatRp(item.harga_pbf)}
+							</TableCell>
+
+							<!-- Harga Jual -->
+							<TableCell class="text-right text-xs font-bold text-mint-700 font-mono">
+								Rp{formatRp(item.harga_jual)}
+							</TableCell>
+
+							<!-- Margin (%) -->
+							<TableCell class="text-center text-xs">
+								{#if marginPct >= 10}
+									<Badge variant="success" class="text-[10px]">+{marginPct}%</Badge>
+								{:else if marginPct > 0}
+									<Badge variant="secondary" class="text-[10px] bg-amber-50 text-amber-700">+{marginPct}%</Badge>
+								{:else}
+									<Badge variant="destructive" class="text-[10px]">{marginPct}%</Badge>
+								{/if}
+							</TableCell>
+
+							<!-- Diskon PBF (Diberikan) -->
+							<TableCell class="text-center text-xs">
+								{#if item.diberikan === 1}
+									<span class="text-mint-600 font-bold" title="Diskon PBF Diberikan">✓</span>
+								{:else}
+									<span class="text-slate-300" title="Tidak Diberikan">✗</span>
+								{/if}
+							</TableCell>
+
+							<!-- Status (isActive) -->
+							<TableCell class="text-center">
+								{#if item.isActive === 1}
+									<Badge variant="success" class="text-[10px]">Aktif</Badge>
+								{:else}
+									<Badge variant="destructive" class="text-[10px]">Nonaktif</Badge>
+								{/if}
+							</TableCell>
+
+							<!-- Aksi -->
+							<TableCell class="text-right">
+								<div class="flex items-center justify-end gap-1">
+									<!-- Rubah Harga Quick Button -->
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-7 w-7 text-mint-600 hover:bg-mint-50 cursor-pointer"
+										title="Rubah Harga & Stok"
+										onclick={() => openRubahHarga(item)}
+									>
+										<DollarSign class="w-3.5 h-3.5" />
+									</Button>
+
+									<!-- Edit Master Obat & Stok Sheet Button -->
+									<Button
+										variant="ghost"
+										size="icon"
+										class="h-7 w-7 text-slate-600 hover:text-mint-600 cursor-pointer"
+										title="Edit Detail Obat"
+										onclick={() => openEdit(item)}
+									>
+										<Edit2 class="w-3.5 h-3.5" />
+									</Button>
+
+									<!-- Toggle Aktif/Nonaktif atau Hapus -->
+									{#if hasTransactions.has(item.obat_id)}
+										{#if item.isActive === 1}
+											<Button
+												variant="outline"
+												size="sm"
+												class="h-7 text-[10px] text-amber-700 hover:bg-amber-50"
+												onclick={() => setActive(item, 0)}
+											>
+												<Pause class="w-3 h-3 mr-1" /> Nonaktifkan
+											</Button>
+										{:else}
+											<Button
+												variant="outline"
+												size="sm"
+												class="h-7 text-[10px] text-emerald-700 hover:bg-emerald-50"
+												onclick={() => setActive(item, 1)}
+											>
+												<Play class="w-3 h-3 mr-1" /> Aktifkan
+											</Button>
+										{/if}
+									{:else}
+										{#if item.isActive === 0}
+											<Button
+												variant="outline"
+												size="sm"
+												class="h-7 text-[10px] text-emerald-700 hover:bg-emerald-50"
+												onclick={() => setActive(item, 1)}
+											>
+												<Play class="w-3 h-3 mr-1" /> Aktifkan
+											</Button>
+										{/if}
+										<Button
+											variant="ghost"
+											size="icon"
+											class="h-7 w-7 text-slate-400 hover:text-red-600"
+											title="Hapus Obat"
+											onclick={() => confirmDelete(item)}
+										>
+											<Trash2 class="w-3.5 h-3.5" />
+										</Button>
+									{/if}
+								</div>
+							</TableCell>
+						</TableRow>
+					{/each}
+				{/if}
+			</TableBody>
+		</Table>
+
+		<!-- Pagination Footer -->
+		{#if !loading && totalCount > 0}
+			<Pagination
+				currentPage={currentPage}
+				totalItems={totalCount}
+				pageSize={pageSize}
+				onPageChange={(page) => {
+					currentPage = page;
+					loadData();
+				}}
+				onPageSizeChange={(size) => {
+					pageSize = size;
+					currentPage = 1;
+					loadData();
+				}}
+			/>
+		{/if}
 	</div>
 </div>
 
@@ -742,7 +711,7 @@
 
 		<!-- Stok & Harga Fields -->
 		<div class="border-t border-slate-100 pt-3 mt-3">
-			<h4 class="text-xs font-bold text-teal-800 uppercase tracking-wider mb-3">
+			<h4 class="text-xs font-bold text-teal-800 mb-3">
 				Informasi Stok {isEditing ? '' : '& Harga Awal'}
 			</h4>
 			<div class="space-y-3">
@@ -816,13 +785,13 @@
 			<!-- Price Comparison -->
 			<div class="grid grid-cols-2 gap-3 text-xs">
 				<div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
-					<div class="text-[10px] font-bold text-slate-400 uppercase">Saat Ini</div>
+					<div class="text-[10px] font-bold text-slate-400">Saat Ini</div>
 					<div class="flex justify-between"><span>PBF:</span><span class="font-mono font-medium">Rp{formatRp(hargaTarget.harga_pbf)}</span></div>
 					<div class="flex justify-between"><span>Jual:</span><span class="font-mono font-bold text-teal-700">Rp{formatRp(hargaTarget.harga_jual)}</span></div>
 					<div class="flex justify-between text-slate-500"><span>Diskon PBF:</span><span class="font-semibold text-purple-700">{hargaTarget.diberikan === 1 ? 'Diberikan' : 'Tidak Diberikan'}</span></div>
 				</div>
 				<div class="bg-teal-50/70 p-3 rounded-lg border border-teal-200 space-y-1">
-					<div class="text-[10px] font-bold text-teal-700 uppercase">Harga Baru</div>
+					<div class="text-[10px] font-bold text-teal-700">Harga Baru</div>
 					<div class="flex justify-between"><span>PBF:</span><span class="font-mono font-medium">Rp{formatRp(quickHargaPbf)}</span></div>
 					<div class="flex justify-between"><span>Jual:</span><span class="font-mono font-bold text-teal-700">Rp{formatRp(quickHargaJual)}</span></div>
 					<div class="flex justify-between text-slate-500"><span>Diskon PBF:</span><span class="font-semibold text-purple-700">{quickDiberikan === 1 ? 'Diberikan' : 'Tidak Diberikan'}</span></div>

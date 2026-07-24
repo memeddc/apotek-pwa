@@ -10,7 +10,12 @@
 	import { Sheet } from '$lib/components/ui/sheet';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { ClipboardList, Plus, Search, Eye, RotateCcw, Save, Trash2, Pill, FlaskConical, User, UserCheck } from 'lucide-svelte';
+	import { PageHeader } from '$lib/components/ui/page-header';
+	import { DataToolbar } from '$lib/components/ui/data-toolbar';
+	import { Pagination } from '$lib/components/ui/pagination';
+	import { NumberStepper } from '$lib/components/ui/number-stepper';
+	import { DatePicker } from '$lib/components/ui/date-picker';
+	import { ClipboardList, Plus, Search, Eye, RotateCcw, Save, Trash2, Pill, FlaskConical, User, UserCheck, Stethoscope, SearchX, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-svelte';
 
 	type ResepWithDetail = Iresep & {
 		detailCount?: number;
@@ -26,6 +31,43 @@
 	let resepList = $state<ResepWithDetail[]>([]);
 	let searchQuery = $state('');
 	let dateFilter = $state<'all' | 'today' | '7days'>('all');
+
+	// Pagination & Sorting states
+	let currentPage = $state(1);
+	let pageSize = $state(25);
+	let sortField = $state<'resep_id' | 'tanggal_resep' | 'pasien_nama' | 'dokter_nama'>('tanggal_resep');
+	let sortOrder = $state<'asc' | 'desc'>('desc');
+
+	let sortedResep = $derived(
+		[...resepList].sort((a, b) => {
+			const valA = a[sortField]?.toLowerCase() || '';
+			const valB = b[sortField]?.toLowerCase() || '';
+			if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+			if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+			return 0;
+		})
+	);
+
+	let pagedResep = $derived(
+		sortedResep.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+	);
+
+	function toggleSort(field: 'resep_id' | 'tanggal_resep' | 'pasien_nama' | 'dokter_nama') {
+		if (sortField === field) {
+			sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortField = field;
+			sortOrder = 'asc';
+		}
+	}
+
+	let searchTimer: ReturnType<typeof setTimeout>;
+	function handleSearchInput() {
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			loadResepList();
+		}, 300);
+	}
 
 	// Detail Sheet states
 	let selectedResep = $state<Iresep | null>(null);
@@ -452,19 +494,11 @@
 			toast.success(`Resep '${resepId}' untuk pasien '${pasienNama}' berhasil disimpan!`);
 			showAddSheet = false;
 			await loadResepList();
-		} catch (e: any) {
-			toast.error(e?.message || 'Terjadi kesalahan saat menyimpan resep.');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Gagal menyimpan resep.');
 		} finally {
 			saving = false;
 		}
-	}
-
-	let searchTimeout: ReturnType<typeof setTimeout>;
-	function handleSearchInput() {
-		clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(() => {
-			loadResepList();
-		}, 300);
 	}
 
 	onMount(() => {
@@ -472,36 +506,30 @@
 	});
 </script>
 
-<div class="space-y-6">
+<div class="space-y-4">
 	<!-- Page Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-		<div>
-			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<ClipboardList class="w-6 h-6 text-teal-600" />
-				Resep Dokter
-			</h2>
-			<p class="text-xs text-slate-500 mt-1">Kelola resep pasien dari dokter dan obat racikan</p>
-		</div>
+	<PageHeader
+		title="Resep Dokter"
+		description="Kelola resep pasien dari dokter dan peracikan obat apotek"
+		badge={`${resepList.length} Resep`}
+	>
+		{#snippet actions()}
+			<Button onclick={openAddSheet} class="bg-mint-500 hover:bg-mint-600 text-white font-bold rounded-xl gap-2 shadow-xs cursor-pointer">
+				<Plus class="w-4 h-4" /> Resep Baru
+			</Button>
+		{/snippet}
+	</PageHeader>
 
-		<Button onclick={openAddSheet}>
-			<Plus class="w-4 h-4 mr-2" /> Resep Baru
-		</Button>
-	</div>
-
-	<!-- Toolbar & Search -->
-	<div class="flex flex-wrap items-center justify-between gap-4">
-		<div class="flex flex-wrap items-center gap-3 flex-1">
-			<div class="relative min-w-[240px] max-w-sm">
-				<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
-				<Input
-					type="text"
-					placeholder="Cari pasien, dokter, no resep..."
-					bind:value={searchQuery}
-					oninput={handleSearchInput}
-					class="pl-9"
-				/>
-			</div>
-
+	<!-- Data Toolbar -->
+	<DataToolbar
+		searchPlaceholder="Cari pasien, dokter, no resep..."
+		bind:searchValue={searchQuery}
+		onSearchInput={handleSearchInput}
+		totalItems={resepList.length}
+		filteredCount={resepList.length}
+		itemLabel="resep"
+	>
+		{#snippet filters()}
 			<Select
 				bind:value={dateFilter}
 				onValueChange={loadResepList}
@@ -510,28 +538,55 @@
 					{ value: 'today', label: 'Hari Ini' },
 					{ value: '7days', label: '7 Hari Terakhir' }
 				]}
-				class="w-40"
+				class="w-36 h-9 text-xs rounded-xl"
 			/>
-
-			<Button variant="outline" size="sm" onclick={loadResepList} disabled={loading}>
+			<Button variant="outline" size="sm" onclick={loadResepList} disabled={loading} class="h-9 px-3 rounded-xl border-slate-200 cursor-pointer text-xs">
 				<RotateCcw class="w-3.5 h-3.5 mr-1" /> Refresh
 			</Button>
-		</div>
-	</div>
+		{/snippet}
+	</DataToolbar>
 
-	<!-- Data Table -->
-	<Table>
-		<TableHeader>
-			<TableRow>
-				<TableHead class="w-36">No. Resep</TableHead>
-				<TableHead>Tgl Resep</TableHead>
-				<TableHead>Nama Pasien</TableHead>
-				<TableHead>Dokter Penanggung Jawab</TableHead>
-				<TableHead>Alamat</TableHead>
-				<TableHead class="w-24 text-center">Aksi</TableHead>
-			</TableRow>
-		</TableHeader>
-		<TableBody>
+	<!-- Data Table Container -->
+	<div class="rounded-2xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
+		<Table class="table-compact table-striped">
+			<TableHeader class="bg-slate-50/80 border-b border-slate-200/80">
+				<TableRow class="hover:bg-transparent">
+					<TableHead class="w-36 font-semibold text-slate-700">
+						<button type="button" onclick={() => toggleSort('resep_id')} class="flex items-center gap-1.5 hover:text-mint-600 cursor-pointer font-bold text-xs">
+							No. Resep
+							{#if sortField === 'resep_id'}
+								{#if sortOrder === 'asc'}<ArrowUp class="w-3.5 h-3.5 text-mint-600" />{:else}<ArrowDown class="w-3.5 h-3.5 text-mint-600" />{/if}
+							{:else}
+								<ArrowUpDown class="w-3 h-3 text-slate-400" />
+							{/if}
+						</button>
+					</TableHead>
+					<TableHead class="font-semibold text-slate-700">
+						<button type="button" onclick={() => toggleSort('tanggal_resep')} class="flex items-center gap-1.5 hover:text-mint-600 cursor-pointer font-bold text-xs">
+							Tgl Resep
+							{#if sortField === 'tanggal_resep'}
+								{#if sortOrder === 'asc'}<ArrowUp class="w-3.5 h-3.5 text-mint-600" />{:else}<ArrowDown class="w-3.5 h-3.5 text-mint-600" />{/if}
+							{:else}
+								<ArrowUpDown class="w-3 h-3 text-slate-400" />
+							{/if}
+						</button>
+					</TableHead>
+					<TableHead class="font-semibold text-slate-700">
+						<button type="button" onclick={() => toggleSort('pasien_nama')} class="flex items-center gap-1.5 hover:text-mint-600 cursor-pointer font-bold text-xs">
+							Nama Pasien
+							{#if sortField === 'pasien_nama'}
+								{#if sortOrder === 'asc'}<ArrowUp class="w-3.5 h-3.5 text-mint-600" />{:else}<ArrowDown class="w-3.5 h-3.5 text-mint-600" />{/if}
+							{:else}
+								<ArrowUpDown class="w-3 h-3 text-slate-400" />
+							{/if}
+						</button>
+					</TableHead>
+					<TableHead class="font-semibold text-slate-700">Dokter Penanggung Jawab</TableHead>
+					<TableHead class="font-semibold text-slate-700">Alamat</TableHead>
+					<TableHead class="w-24 text-center font-bold text-slate-700">Aksi</TableHead>
+				</TableRow>
+			</TableHeader>
+			<TableBody>
 			{#if loading}
 				{#each Array(5) as _}
 					<TableRow>
@@ -545,19 +600,23 @@
 				{/each}
 			{:else if resepList.length === 0}
 				<TableRow>
-					<TableCell colspan={6} class="text-center py-8 text-slate-400 text-xs">
-						Tidak ada data resep ditemukan.
+					<TableCell colspan={6} class="text-center py-12 text-slate-400">
+						<div class="flex flex-col items-center justify-center gap-2">
+							<SearchX class="w-8 h-8 text-slate-300" />
+							<p class="text-xs font-semibold text-slate-600">Tidak ada resep ditemukan</p>
+							<p class="text-[11px] text-slate-400">Coba sesuaikan kata kunci pencarian atau filter tanggal.</p>
+						</div>
 					</TableCell>
 				</TableRow>
 			{:else}
-				{#each resepList as item}
-					<TableRow>
+				{#each pagedResep as item}
+					<TableRow class="transition-colors">
 						<TableCell>
 							<Badge variant="secondary" class="font-mono text-xs text-sky-700 bg-sky-50">{item.resep_id}</Badge>
 						</TableCell>
-						<TableCell class="text-xs text-slate-600">{formatDateIndo(item.tanggal_resep)}</TableCell>
-						<TableCell class="font-semibold text-slate-900 text-xs">
-							<span class="flex items-center gap-1.5">
+						<TableCell class="text-xs text-slate-600 font-medium">{formatDateIndo(item.tanggal_resep)}</TableCell>
+						<TableCell class="font-medium text-slate-800 text-xs">
+							<span class="flex items-center gap-1.5 font-semibold text-slate-900">
 								<User class="w-3.5 h-3.5 text-teal-600 shrink-0" /> {item.pasien_nama}
 							</span>
 						</TableCell>
@@ -568,7 +627,7 @@
 						</TableCell>
 						<TableCell class="text-xs text-slate-500 truncate max-w-xs">{item.alamat_pasien || '—'}</TableCell>
 						<TableCell class="text-center">
-							<Button variant="outline" size="sm" class="h-7 text-xs hover:bg-sky-50 hover:text-sky-700" onclick={() => openDetailSheet(item)}>
+							<Button variant="outline" size="sm" class="h-7 text-xs hover:bg-sky-50 hover:text-sky-700 cursor-pointer" onclick={() => openDetailSheet(item)}>
 								<Eye class="w-3 h-3 mr-1" /> Detail
 							</Button>
 						</TableCell>
@@ -577,6 +636,21 @@
 			{/if}
 		</TableBody>
 	</Table>
+
+	<!-- Pagination Footer -->
+	{#if !loading && resepList.length > 0}
+		<Pagination
+			currentPage={currentPage}
+			totalItems={resepList.length}
+			pageSize={pageSize}
+			onPageChange={(page) => (currentPage = page)}
+			onPageSizeChange={(size) => {
+				pageSize = size;
+				currentPage = 1;
+			}}
+		/>
+	{/if}
+</div>
 </div>
 
 <!-- Slide-in Sheet Detail Resep -->
@@ -697,8 +771,8 @@
 				<Input id="resep-id-input" type="text" bind:value={inputResepId} class="font-mono bg-slate-50 text-xs" />
 			</div>
 			<div class="space-y-1">
-				<label for="resep-date-input" class="text-xs font-semibold text-slate-700">Tgl Resep</label>
-				<Input id="resep-date-input" type="date" bind:value={inputTanggalResep} class="text-xs" />
+				<label for="resep-date-input" class="text-xs font-semibold text-slate-700 block">Tgl Resep</label>
+				<DatePicker id="resep-date-input" bind:value={inputTanggalResep} placeholder="Pilih tgl resep..." />
 			</div>
 		</div>
 
@@ -749,10 +823,16 @@
 					{/if}
 				</div>
 
-				<div class="grid grid-cols-3 gap-2 items-center">
-					<Input type="number" min="1" placeholder="Qty Asli" bind:value={inputQtyAsli} class="text-xs" />
-					<Input type="number" min="0" placeholder="Harga/Obat" bind:value={inputHargaPerObat} class="text-xs" />
-					<Button size="sm" class="h-9 text-xs" onclick={addItemLine}>+ Tambah</Button>
+				<div class="grid grid-cols-12 gap-2 items-center">
+					<div class="col-span-5">
+						<NumberStepper bind:value={inputQtyAsli} min={1} class="w-full" />
+					</div>
+					<div class="col-span-4">
+						<Input type="number" min="0" placeholder="Harga/Obat" bind:value={inputHargaPerObat} onfocus={(e) => e.currentTarget.select()} class="text-xs h-9 font-mono rounded-xl" />
+					</div>
+					<div class="col-span-3">
+						<Button size="sm" class="h-9 w-full text-xs font-bold bg-mint-500 hover:bg-mint-600 cursor-pointer" onclick={addItemLine}>+ Tambah</Button>
+					</div>
 				</div>
 			</div>
 
@@ -761,7 +841,7 @@
 					{#each itemLines as line, idx}
 						<div class="flex items-center justify-between p-1.5 rounded bg-white border border-slate-200 text-xs">
 							<span>{line.obat_nama} ({line.qty_asli}x @ Rp{formatRp(line.harga_per_obat)})</span>
-							<Button variant="ghost" size="icon" class="h-6 w-6 text-red-500" onclick={() => removeItemLine(idx)}>
+							<Button variant="ghost" size="icon" class="h-6 w-6 text-red-500 cursor-pointer" onclick={() => removeItemLine(idx)}>
 								<Trash2 class="w-3 h-3" />
 							</Button>
 						</div>
@@ -801,9 +881,13 @@
 					{/if}
 				</div>
 
-				<div class="grid grid-cols-2 gap-2 items-center">
-					<Input type="number" min="1" placeholder="Qty Racik" bind:value={inputQtyRacikan} class="text-xs" />
-					<Button size="sm" variant="secondary" class="h-9 text-xs" onclick={addRacikanLine}>+ Tambah Racik</Button>
+				<div class="grid grid-cols-12 gap-2 items-center">
+					<div class="col-span-6">
+						<NumberStepper bind:value={inputQtyRacikan} min={1} class="w-full" />
+					</div>
+					<div class="col-span-6">
+						<Button size="sm" variant="secondary" class="h-9 w-full text-xs font-bold bg-purple-100 text-purple-800 hover:bg-purple-200 cursor-pointer" onclick={addRacikanLine}>+ Tambah Racik</Button>
+					</div>
 				</div>
 			</div>
 

@@ -8,6 +8,7 @@
 	import { Card, CardHeader, CardTitle, CardContent } from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { DatePicker } from '$lib/components/ui/date-picker';
 	import { FileText, Search, Printer, Package, Building2 } from 'lucide-svelte';
 
 	type PurchaseDetail = {
@@ -247,27 +248,13 @@
 				<!-- Begda (Dari Tanggal) -->
 				<div class="lg:col-span-3 space-y-1">
 					<label for="date-from" class="text-xs font-semibold text-slate-600">Dari Tanggal (Begda)</label>
-					<Input
-						id="date-from"
-						type="date"
-						bind:value={dateFrom}
-						onclick={(e) => e.currentTarget.showPicker?.()}
-						onfocus={(e) => e.currentTarget.showPicker?.()}
-						class="text-xs cursor-pointer"
-					/>
+					<DatePicker id="date-from" bind:value={dateFrom} placeholder="Pilih dari tanggal..." />
 				</div>
 
 				<!-- Endda (Sampai Tanggal) -->
 				<div class="lg:col-span-3 space-y-1">
 					<label for="date-to" class="text-xs font-semibold text-slate-600">Sampai Tanggal (Endda)</label>
-					<Input
-						id="date-to"
-						type="date"
-						bind:value={dateTo}
-						onclick={(e) => e.currentTarget.showPicker?.()}
-						onfocus={(e) => e.currentTarget.showPicker?.()}
-						class="text-xs cursor-pointer"
-					/>
+					<DatePicker id="date-to" bind:value={dateTo} placeholder="Pilih sampai tanggal..." />
 				</div>
 
 				<!-- Search Input -->

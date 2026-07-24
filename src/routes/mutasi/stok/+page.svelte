@@ -9,7 +9,10 @@
 	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { History, Search, RotateCcw, X, ArrowUpRight, ArrowDownRight, RefreshCw, Building2 } from 'lucide-svelte';
+	import { PageHeader } from '$lib/components/ui/page-header';
+	import { DataToolbar } from '$lib/components/ui/data-toolbar';
+	import { Pagination } from '$lib/components/ui/pagination';
+	import { History, Search, RotateCcw, X, ArrowUpRight, ArrowDownRight, RefreshCw, Building2, SearchX } from 'lucide-svelte';
 
 	type KartuRow = Ikartu_stok & { obat_nama: string; pbf_nama?: string };
 	let rows = $state<KartuRow[]>([]);
@@ -19,8 +22,16 @@
 	let loading = $state(true);
 	let searchLoading = $state(false);
 	let errorMessage = $state('');
-	let limit = $state(100);
-	let limitStr = $state('100');
+	let limit = $state(500);
+
+	// Pagination states
+	let currentPage = $state(1);
+	let pageSize = $state(25);
+
+	let pagedRows = $derived(
+		rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+	);
+
 	let searchTimer: ReturnType<typeof setTimeout>;
 	let searchRequest = 0;
 
@@ -114,7 +125,6 @@
 
 			const names = await medicineMap(kartu.map((item) => item.obat_id));
 
-			// Load PBF info for incoming transactions (qty > 0 or non-sales/non-opname IDs)
 			const incomingTransIds = kartu
 				.filter((item) => item.qty > 0 || !/^(J|SO|O)/i.test(item.trans_id))
 				.map((item) => item.trans_id);
@@ -131,6 +141,7 @@
 			toast.error(errorMessage);
 		}
 		loading = false;
+		currentPage = 1;
 	}
 
 	function clearObat() {
@@ -143,93 +154,51 @@
 	onMount(loadKartu);
 </script>
 
-<div class="space-y-6">
+<div class="space-y-4">
 	<!-- Page Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-		<div>
-			<h2 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-				<History class="w-6 h-6 text-teal-600" />
-				Kartu Stok
-			</h2>
-			<p class="text-xs text-slate-500 mt-1">Audit trail riwayat mutasi stok obat (masuk, keluar, & opname)</p>
-		</div>
+	<PageHeader
+		title="Kartu Stok"
+		description="Audit trail riwayat mutasi stok obat (masuk, keluar, & opname)"
+		badge={`${rows.length} Mutasi`}
+	>
+		{#snippet actions()}
+			<Button variant="outline" size="sm" onclick={loadKartu} disabled={loading} class="rounded-xl border-slate-200 cursor-pointer text-xs">
+				<RotateCcw class="w-3.5 h-3.5 mr-1.5" /> Muat Ulang
+			</Button>
+		{/snippet}
+	</PageHeader>
 
-		<Button variant="outline" size="sm" onclick={loadKartu} disabled={loading}>
-			<RotateCcw class="w-3.5 h-3.5 mr-1.5" /> Muat Ulang
-		</Button>
-	</div>
-
-	<!-- Toolbar & Search -->
-	<div class="flex flex-wrap items-center justify-between gap-4">
-		<div class="flex flex-wrap items-center gap-3 flex-1">
-			<div class="relative min-w-[240px] max-w-sm">
-				<Search class="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
-				<Input
-					type="search"
-					bind:value={obatSearch}
-					oninput={handleSearchInput}
-					placeholder="Filter berdasarkan nama / kode obat..."
-					class="pl-9"
-				/>
-
-				{#if searchLoading}
-					<div class="absolute left-0 right-0 top-full mt-1 bg-white p-2 rounded-lg border border-slate-200 shadow-lg text-xs text-slate-400 z-20">
-						Mencari obat...
-					</div>
-				{:else if !selectedObat && obatResults.length > 0}
-					<div class="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl max-h-56 overflow-y-auto z-30 divide-y divide-slate-100">
-						{#each obatResults as obat}
-							<button
-								type="button"
-								onclick={() => pilihObat(obat)}
-								class="w-full text-left p-2.5 hover:bg-teal-50 transition-colors flex items-center justify-between text-xs cursor-pointer"
-							>
-								<span class="font-semibold text-slate-900">{obat.obat_nama}</span>
-								<Badge variant="secondary" class="text-[10px]">{obat.obat_id}</Badge>
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-
-			<Select
-				bind:value={limitStr}
-				onValueChange={(val) => {
-					limit = Number(val);
-					loadKartu();
-				}}
-				options={[
-					{ value: '100', label: '100 Riwayat' },
-					{ value: '250', label: '250 Riwayat' },
-					{ value: '500', label: '500 Riwayat' }
-				]}
-				class="w-36"
-			/>
-
+	<!-- Data Toolbar -->
+	<DataToolbar
+		searchPlaceholder="Filter berdasarkan nama / kode obat..."
+		bind:searchValue={obatSearch}
+		onSearchInput={handleSearchInput}
+		totalItems={rows.length}
+		filteredCount={rows.length}
+		itemLabel="mutasi"
+	>
+		{#snippet filters()}
 			{#if selectedObat}
-				<Button variant="ghost" size="sm" onclick={clearObat} class="text-xs text-slate-600">
+				<Button variant="ghost" size="sm" onclick={clearObat} class="h-9 text-xs text-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer">
 					<X class="w-3.5 h-3.5 mr-1" /> Reset Filter ({selectedObat.obat_nama})
 				</Button>
 			{/if}
-		</div>
+		{/snippet}
+	</DataToolbar>
 
-		<div class="text-xs text-slate-500">
-			{selectedObat ? `Riwayat khusus: ${selectedObat.obat_nama}` : 'Menampilkan mutasi terbaru'}
-		</div>
-	</div>
-
-	<!-- Data Table -->
-	<Table>
-		<TableHeader>
-			<TableRow>
-				<TableHead class="w-44">Waktu</TableHead>
-				<TableHead>Nama Obat</TableHead>
-				<TableHead class="text-center">Jenis Mutasi</TableHead>
-				<TableHead class="text-center">Jumlah Mutasi</TableHead>
-				<TableHead>No. Referensi / Supplier PBF</TableHead>
-			</TableRow>
-		</TableHeader>
-		<TableBody>
+	<!-- Data Table Container -->
+	<div class="rounded-2xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
+		<Table class="table-compact table-striped">
+			<TableHeader class="bg-slate-50/80 border-b border-slate-200/80">
+				<TableRow class="hover:bg-transparent">
+					<TableHead class="w-44 font-semibold text-slate-700">Waktu</TableHead>
+					<TableHead class="font-semibold text-slate-700">Nama Obat</TableHead>
+					<TableHead class="text-center font-semibold text-slate-700">Jenis Mutasi</TableHead>
+					<TableHead class="text-center font-semibold text-slate-700">Jumlah Mutasi</TableHead>
+					<TableHead class="font-semibold text-slate-700">No. Referensi / Supplier PBF</TableHead>
+				</TableRow>
+			</TableHeader>
+			<TableBody>
 			{#if loading}
 				{#each Array(6) as _}
 					<TableRow>
@@ -242,22 +211,26 @@
 				{/each}
 			{:else if rows.length === 0}
 				<TableRow>
-					<TableCell colspan={5} class="text-center py-8 text-slate-400 text-xs">
-						Belum ada riwayat mutasi kartu stok.
+					<TableCell colspan={5} class="text-center py-12 text-slate-400">
+						<div class="flex flex-col items-center justify-center gap-2">
+							<SearchX class="w-8 h-8 text-slate-300" />
+							<p class="text-xs font-semibold text-slate-600">Belum ada riwayat mutasi kartu stok</p>
+							<p class="text-[11px] text-slate-400">Pilih obat di atas untuk melihat audit trail riwayat mutasi spesifik.</p>
+						</div>
 					</TableCell>
 				</TableRow>
 			{:else}
-				{#each rows as row}
+				{#each pagedRows as row}
 					{@const isMasuk = jenisMutasi(row) === 'Masuk'}
-					<TableRow>
+					<TableRow class="transition-colors">
 						<!-- Waktu -->
 						<TableCell class="text-xs text-slate-600 font-medium">
 							{formatWaktu(row.tanggal_waktu)}
 						</TableCell>
 
 						<!-- Nama Obat -->
-						<TableCell class="font-semibold text-slate-900 text-xs">
-							{row.obat_nama}
+						<TableCell class="font-medium text-slate-800 text-xs">
+							<span class="font-semibold text-slate-900">{row.obat_nama}</span>
 							<span class="block text-[10px] font-mono text-purple-700">{row.obat_id}</span>
 						</TableCell>
 
@@ -306,4 +279,19 @@
 			{/if}
 		</TableBody>
 	</Table>
+
+	<!-- Pagination Footer -->
+	{#if !loading && rows.length > 0}
+		<Pagination
+			currentPage={currentPage}
+			totalItems={rows.length}
+			pageSize={pageSize}
+			onPageChange={(page) => (currentPage = page)}
+			onPageSizeChange={(size) => {
+				pageSize = size;
+				currentPage = 1;
+			}}
+		/>
+	{/if}
+</div>
 </div>
