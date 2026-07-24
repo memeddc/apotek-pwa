@@ -7,7 +7,7 @@
 
 	const routeNames: Record<string, string> = {
 		'': 'Dashboard',
-		'penjualan': 'Penjualan (POS)',
+		'penjualan': 'Penjualan',
 		'cetak_nota': 'Cetak Nota',
 		'mutasi': 'Mutasi',
 		'faktur': 'Faktur Pembelian',
@@ -16,8 +16,9 @@
 		'rubah_harga': 'Penyesuaian Harga',
 		'resep': 'Resep Dokter',
 		'jenisobat': 'Jenis Obat',
-		'obat': 'Master Obat',
-		'pbf': 'Master PBF / Supplier'
+		'obat': 'Data & Stok Obat',
+		'pbf': 'PBF / Supplier',
+		'laporan': 'Laporan'
 	};
 
 	let segments = $derived.by(() => {
